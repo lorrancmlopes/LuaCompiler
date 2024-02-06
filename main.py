@@ -9,20 +9,23 @@ def compilador(string):
     tokens = ''.join(string.split()) 
     for elemento in tokens:
         if not(elemento.isnumeric()) and not(elemento in operacoes):
+            print("Erro: Entrada inválida. A entrada deve conter apenas números inteiros e operações de soma/subtração.")
             return
 
     # Análise Sintática:
     #verificar a ordem dos tokens
-    if tokens[0] in operacoes or len(tokens) < 3:
+    if tokens[0] in operacoes or tokens[-1] in operacoes or len(tokens) < 3:
+        print("Erro: Entrada inválida. A expressão não pode começar ou terminar com uma operação, e deve conter pelo menos três caracteres.")   
         return
     #verifica se depois de um numero tem uma operação
     for i in range(len(tokens)-1):
         if tokens[i] in operacoes:
             if tokens[i+1] in operacoes:
+                print("Erro: Entrada inválida. Não são permitidas operações consecutivas (++, +-, --, -+).")
                 return
         
     #Análise Semântica: 
-    # ????
+    #Aplicar operações na ordem correta
 
     pattern = r'[-+]'
     valores = re.split(pattern, tokens)

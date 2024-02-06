@@ -22,7 +22,7 @@ def compilador(string):
                 return
         
     #Análise Semântica: 
-    # ???
+    # ????
 
     pattern = r'[-+]'
     valores = re.split(pattern, tokens)

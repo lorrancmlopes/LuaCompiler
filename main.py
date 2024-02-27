@@ -1,22 +1,14 @@
 #imports
 import sys
 
-# 1. Colocar o Diagrama Sintático no GitHub
-
-# 2. Criar uma Classe Token com 2 atributos:
-# - type: string. tipo do token
-# - value: integer. valor do token
+# 1. Atualizar o Diagrama Sintático e EBNF no GitHub
 
 class Token:
     def __init__(self, type:str, value):
         self.type = type
         self.value = value
 
-# 3. Criar uma Classe Tokenizer com 3 atributos e 1 método:
-# - source: string. código-fonte que será tokenizado
-# - position: integer. posição atual que o Tokenizador está separando
-# - next: Token. o último token separado
-# - selectNext(): lê o próximo token e atualiza o atributo next
+# 2. Implementar as melhorias conforme o DS atualizado
         
 class Tokenizer:
     def __init__(self, source:str):
@@ -60,6 +52,14 @@ class Tokenizer:
                 self.advance()
                 return Token('MINUS', '-')
 
+            if self.current_char == '*':
+                self.advance()
+                return Token('MULT', '*')
+
+            if self.current_char == '/':
+                self.advance()
+                return Token('DIV', '/')
+            
             # Se não corresponder a nenhum dos tipos de token conhecidos, levanta um erro
             raise SyntaxError("Caractere inválido encontrado: {}".format(self.current_char))
 
@@ -76,28 +76,54 @@ class Parser:
 
     @staticmethod
     def parseExpression():
+        #chama parseterm para todos
+        result_parse = 0
+        result_term = 0
+        token = None
+        result_parse, token = Parser.parseTerm() #1
+        while(True):
+            if token.type == 'EOF':
+                return result_parse
+            elif token.type in ["MINUS", "PLUS"]: #+
+                if token.type == "MINUS":
+                    result_term, token = Parser.parseTerm() #chama 
+                    if result_term.isdigit():
+                        result_parse -= result_term
+                    else:
+                        raise SyntaxError("Erro: Expressão inválida (esperava um número após -)")
+                else: 
+                    result_term, token = Parser.parseTerm() #2, EOF
+                    if result_term.isdigit():
+                        result_parse += result_term #1+
+                    else:
+                        raise SyntaxError("Erro: Expressão inválida (esperava um número após +)")
+            else:
+                raise SyntaxError("Erro: Expressão inválida")
+            
+
+    @staticmethod  # vai ter o parseterm
+    def parseTerm():# renomear para parseterm e criar um novo Term # divisão é // (inteira)
         token = Parser.tokenizer.selectNext()
-
-        if token.type == 'INT':
-            result = token.value
+        result = token.value
+        if token.type in ['INT']:
             token = Parser.tokenizer.selectNext()
-
-            while token.type in ['PLUS', 'MINUS']:
-                if token.type == 'PLUS':
+            while token.type in ['MULT', 'DIV']:
+                if token.type == 'MULT':
                     token = Parser.tokenizer.selectNext()
                     if token.type == 'INT':
-                        result += token.value
+                        result *= token.value
                     else:
-                        raise SyntaxError("Erro: Esperado número após '+'")
-                elif token.type == 'MINUS':
+                        raise SyntaxError("Erro: Esperado número após '*'")
+                elif token.type == 'DIV':
                     token = Parser.tokenizer.selectNext()
                     if token.type == 'INT':
-                        result -= token.value
+                        result //= token.value
                     else:
-                        raise SyntaxError("Erro: Esperado número após '-'")
+                        raise SyntaxError("Erro: Esperado número após '/'")
                 token = Parser.tokenizer.selectNext()
-
-            return result
+            return (result, token)
+        elif token.type in ["EOF", "PLUS", "MINUS"]:
+            return (result, token)
         else:
             raise SyntaxError("Erro: Expressão inválida")
 
@@ -118,19 +144,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-         
-        
-
-        
-
-
-            
-        
-
-    
-
-    

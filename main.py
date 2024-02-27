@@ -87,13 +87,13 @@ class Parser:
             elif token.type in ["MINUS", "PLUS"]: #+
                 if token.type == "MINUS":
                     result_term, token = Parser.parseTerm() #chama 
-                    if result_term.isdigit():
+                    if type(result_term) == int:
                         result_parse -= result_term
                     else:
                         raise SyntaxError("Erro: Expressão inválida (esperava um número após -)")
                 else: 
                     result_term, token = Parser.parseTerm() #2, EOF
-                    if result_term.isdigit():
+                    if type(result_term) == int:
                         result_parse += result_term #1+
                     else:
                         raise SyntaxError("Erro: Expressão inválida (esperava um número após +)")
@@ -136,11 +136,12 @@ class Parser:
         return result
 
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
         sys.exit(1)
-    expression = sys.argv[1]
+    expression = ' '.join(sys.argv[1:])
     result = Parser.run(expression)
     print(result)
+
 
 if __name__ == "__main__":
     main()

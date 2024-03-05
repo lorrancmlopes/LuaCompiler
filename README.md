@@ -4,7 +4,10 @@
 
 EBNF:
 ```
-EXPRESSION = NUMBER, {("+" | "-" | "*" | "/"), NUMBER} ;
+EXPRESSION = TERM, { ("+" | "-"), TERM } ;
+TERM = FACTOR, { ("*" | "/"), FACTOR } ;
+FACTOR = ("+" | "-") FACTOR | "(" EXPRESSION ")" | number ;
+
 ```
 
 <p align="center">

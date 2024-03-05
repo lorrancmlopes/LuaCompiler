@@ -60,6 +60,14 @@ class Tokenizer:
                 self.advance()
                 return Token('DIV', '/')
             
+            if self.current_char == '(':
+                self.advance()
+                return Token('LPAR', '(')
+            
+            if self.current_char == ')':
+                self.advance()
+                return Token('RPAR', ')')
+
             # Se não corresponder a nenhum dos tipos de token conhecidos, levanta um erro
             raise SyntaxError("Caractere inválido encontrado: {}".format(self.current_char))
 
@@ -76,62 +84,76 @@ class Parser:
 
     @staticmethod
     def parseExpression():
-        #chama parseterm para todos
-        result_parse = 0
-        result_term = 0
-        token = None
-        result_parse, token = Parser.parseTerm() #1
-        while(True):
-            if token.type == 'EOF':
-                return result_parse
-            elif token.type in ["MINUS", "PLUS"]: #+
-                if token.type == "MINUS":
-                    result_term, token = Parser.parseTerm() #chama 
-                    if type(result_term) == int:
-                        result_parse -= result_term
-                    else:
-                        raise SyntaxError("Erro: Expressão inválida (esperava um número após -)")
-                else: 
-                    result_term, token = Parser.parseTerm() #2, EOF
-                    if type(result_term) == int:
-                        result_parse += result_term #1+
-                    else:
-                        raise SyntaxError("Erro: Expressão inválida (esperava um número após +)")
-            else:
-                raise SyntaxError("Erro: Expressão inválida")
+        result_expression, token = Parser.parseTerm() 
+        while(token.type in ["MINUS", "PLUS"]):
+            if token.type == "MINUS":
+                result_term, token = Parser.parseTerm() 
+                if type(result_term) == int:
+                    result_expression -= result_term
+                else:
+                    raise SyntaxError("Erro: Expressão inválida (esperava um número após -)")
+            else: 
+                result_term, token = Parser.parseTerm() 
+                if type(result_term) == int:
+                    result_expression += result_term 
+                else:
+                    raise SyntaxError("Erro: Expressão inválida (esperava um número após +)")
+        return result_expression
             
 
-    @staticmethod  # vai ter o parseterm
-    def parseTerm():# renomear para parseterm e criar um novo Term # divisão é // (inteira)
+    @staticmethod  
+    def parseTerm():
+        result_term, token = Parser.parseFactor() 
+        while(token.type in ["MULT", "DIV"]):
+            if token.type == "MULT":
+                result_factor, token = Parser.parseFactor() 
+                if type(result_factor) == int:
+                    result_term *= result_factor
+                else:
+                    raise SyntaxError("Erro: Expressão inválida (esperava um número após *)")
+            else: 
+                result_factor, token = Parser.parseFactor() 
+                if type(result_factor) == int:
+                    result_term //= result_factor 
+                else:
+                    raise SyntaxError("Erro: Expressão inválida (esperava um número após /)")
+        return result_term, token
+
+    # 3. Implementar parseFactor
+    @staticmethod
+    def parseFactor():
         token = Parser.tokenizer.selectNext()
-        result = token.value
-        if token.type in ['INT']:
-            token = Parser.tokenizer.selectNext()
-            while token.type in ['MULT', 'DIV']:
-                if token.type == 'MULT':
-                    token = Parser.tokenizer.selectNext()
-                    if token.type == 'INT':
-                        result *= token.value
-                    else:
-                        raise SyntaxError("Erro: Esperado número após '*'")
-                elif token.type == 'DIV':
-                    token = Parser.tokenizer.selectNext()
-                    if token.type == 'INT':
-                        result //= token.value
-                    else:
-                        raise SyntaxError("Erro: Esperado número após '/'")
-                token = Parser.tokenizer.selectNext()
-            return (result, token)
-        elif token.type in ["EOF", "PLUS", "MINUS"]:
-            return (result, token)
+        if token.type == 'INT':
+            return token.value, Parser.tokenizer.selectNext()
+        elif token.type == 'LPAR':
+            result_expression = Parser.parseExpression()
+            if Parser.tokenizer.next.type == 'RPAR':
+                return result_expression, Parser.tokenizer.selectNext()
+            else:
+                raise SyntaxError("Erro: Parênteses não fechados")
+        # tratamento de operador unário + e -
+        elif token.type == 'MINUS':
+            result_factor, token = Parser.parseFactor()
+            if type(result_factor) == int:
+                return -result_factor, token
+            else:
+                raise SyntaxError("Erro: Expressão inválida (esperava um número após -)")
+        elif token.type == 'PLUS':
+            result_factor, token = Parser.parseFactor()
+            if type(result_factor) == int:
+                return result_factor, token
+            else:
+                raise SyntaxError("Erro: Expressão inválida (esperava um número após +)")
         else:
-            raise SyntaxError("Erro: Expressão inválida")
+            raise SyntaxError("Erro: Token inesperado")
 
     @staticmethod
     def run(code):
         Parser.tokenizer = Tokenizer(code)
         result = Parser.parseExpression()
         if Parser.tokenizer.next.type != 'EOF':
+            print(Parser.tokenizer.next.type)
+            print(Parser.tokenizer.next.value)
             raise SyntaxError("Erro: Tokens inesperados no final da expressão")
         return result
 

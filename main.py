@@ -152,8 +152,6 @@ class Parser:
         Parser.tokenizer = Tokenizer(code)
         result = Parser.parseExpression()
         if Parser.tokenizer.next.type != 'EOF':
-            print(Parser.tokenizer.next.type)
-            print(Parser.tokenizer.next.value)
             raise SyntaxError("Erro: Tokens inesperados no final da expressão")
         return result
 

@@ -2,7 +2,7 @@
 
 ![git status](http://3.129.230.99/svg/lorrancmlopes/logcomp/)
 
-EBNF:
+**EBNF:**
 ```
 EXPRESSION = TERM, { ("+" | "-"), TERM } ;
 TERM = FACTOR, { ("*" | "/"), FACTOR } ;

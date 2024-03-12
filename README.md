@@ -11,5 +11,5 @@ FACTOR = ("+" | "-") FACTOR | "(" EXPRESSION ")" | number ;
 ```
 
 <p align="center">
-  <img src="diagramaSintatico.png" width="350" title="diagrama sintático">
+  <img src="diagramaSintatico.png" width="350" title="Estado Atual">
 </p>

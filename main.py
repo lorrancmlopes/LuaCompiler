@@ -1,18 +1,65 @@
-#imports
 import sys
+import re
 
-# 1. Atualizar o Diagrama Sintático e EBNF no GitHub
+# 1. Implementar a árvore sintática abstrata (AST)
+class PrePro:
+    @staticmethod
+    def filter(code):
+        # Remove comentários
+        return re.sub(r"--.*", "", code)
+
+
+class Node:
+    def __init__(self, value=None):
+        self.value = value
+        self.children = []
+
+    def evaluate(self):
+        pass
+
+
+class BinOp(Node):
+    def evaluate(self):
+        left = self.children[0].evaluate()
+        right = self.children[1].evaluate()
+        if self.value == '+':
+            return left + right
+        elif self.value == '-':
+            return left - right
+        elif self.value == '*':
+            return left * right
+        elif self.value == '/':
+            return left // right
+
+
+class UnOp(Node):
+    def evaluate(self):
+        if self.value == '-':
+            return -self.children[0].evaluate()
+        else:
+            return self.children[0].evaluate()
+
+
+
+class IntVal(Node):
+    def evaluate(self):
+        return self.value
+
+
+class NoOp(Node):
+    def evaluate(self):
+        pass
+
 
 class Token:
-    def __init__(self, type:str, value):
+    def __init__(self, type: str, value):
         self.type = type
         self.value = value
 
-# 2. Implementar as melhorias conforme o DS atualizado
-        
+
 class Tokenizer:
-    def __init__(self, source:str):
-        self.source = source
+    def __init__(self, source: str):
+        self.source = PrePro.filter(source)
         self.position = 0
         self.current_char = self.source[self.position] if self.position < len(self.source) else None
 
@@ -59,11 +106,11 @@ class Tokenizer:
             if self.current_char == '/':
                 self.advance()
                 return Token('DIV', '/')
-            
+
             if self.current_char == '(':
                 self.advance()
                 return Token('LPAR', '(')
-            
+
             if self.current_char == ')':
                 self.advance()
                 return Token('RPAR', ')')
@@ -78,72 +125,103 @@ class Tokenizer:
         self.next = token
         return token
 
+
 class Parser:
-    def __init__(self, tokenizer:Tokenizer):
+    def __init__(self, tokenizer: Tokenizer):
+        self.tokenizer = tokenizer
+
+    def parseExpression(self):
+        result_expression, token = self.parseTerm(self.tokenizer.selectNext())
+        while token.type in ["MINUS", "PLUS"]:
+            op = token.value
+            token = self.tokenizer.selectNext()
+            result_term, token = self.parseTerm(token)
+            if op == "-":
+                result_expression -= result_term
+            else:
+                result_expression += result_term
+        return result_expression
+
+    def parseTerm(self, token):
+        result_term, token = self.parseFactor(token)
+        while token.type in ["MULT", "DIV"]:
+            op = token.value
+            token = self.tokenizer.selectNext()
+            result_factor, token = self.parseFactor(token)
+            if op == "*":
+                result_term *= result_factor
+            else:
+                result_term //= result_factor
+        return result_term, token
+
+    def parseFactor(self, token):
+        if token.type == 'INT':
+            return token.value, self.tokenizer.selectNext()
+        elif token.type == 'LPAR':
+            result_expression = self.parseExpression()
+            if self.tokenizer.next.type == 'RPAR':
+                return result_expression, self.tokenizer.selectNext()
+            else:
+                raise SyntaxError("Erro: Parênteses não fechados")
+        elif token.type == 'MINUS':
+            result_factor, token = self.parseFactor(self.tokenizer.selectNext())
+            return -result_factor, token
+        elif token.type == 'PLUS':
+            result_factor, token = self.parseFactor(self.tokenizer.selectNext())
+            return result_factor, token
+        else:
+            raise SyntaxError("Erro: Token inesperado")
+
+    def run(self, code):
+        self.tokenizer = Tokenizer(code)
+        result, token = self.parseExpression()
+        if token.type != 'EOF':
+            raise SyntaxError("Erro: Tokens inesperados no final da expressão")
+        return result
+
+    def __init__(self, tokenizer: Tokenizer):
         self.tokenizer = tokenizer
 
     @staticmethod
     def parseExpression():
-        result_expression, token = Parser.parseTerm() 
-        while(token.type in ["MINUS", "PLUS"]):
-            if token.type == "MINUS":
-                result_term, token = Parser.parseTerm() 
-                if type(result_term) == int:
-                    result_expression -= result_term
-                else:
-                    raise SyntaxError("Erro: Expressão inválida (esperava um número após -)")
-            else: 
-                result_term, token = Parser.parseTerm() 
-                if type(result_term) == int:
-                    result_expression += result_term 
-                else:
-                    raise SyntaxError("Erro: Expressão inválida (esperava um número após +)")
+        result_expression, token = Parser.parseTerm()
+        while token.type in ["MINUS", "PLUS"]:
+            op = token.value
+            result_term, token = Parser.parseTerm()
+            bin_op_node = BinOp(op)
+            bin_op_node.children.append(result_expression)
+            bin_op_node.children.append(result_term)
+            result_expression = bin_op_node
         return result_expression
-            
 
-    @staticmethod  
+    @staticmethod
     def parseTerm():
-        result_term, token = Parser.parseFactor() 
-        while(token.type in ["MULT", "DIV"]):
-            if token.type == "MULT":
-                result_factor, token = Parser.parseFactor() 
-                if type(result_factor) == int:
-                    result_term *= result_factor
-                else:
-                    raise SyntaxError("Erro: Expressão inválida (esperava um número após *)")
-            else: 
-                result_factor, token = Parser.parseFactor() 
-                if type(result_factor) == int:
-                    result_term //= result_factor 
-                else:
-                    raise SyntaxError("Erro: Expressão inválida (esperava um número após /)")
+        result_term, token = Parser.parseFactor()
+        while token.type in ["MULT", "DIV"]:
+            op = token.value
+            result_factor, token = Parser.parseFactor()
+            bin_op_node = BinOp(op)
+            bin_op_node.children.append(result_term)
+            bin_op_node.children.append(result_factor)
+            result_term = bin_op_node
         return result_term, token
 
-    # 3. Implementar parseFactor
     @staticmethod
     def parseFactor():
         token = Parser.tokenizer.selectNext()
         if token.type == 'INT':
-            return token.value, Parser.tokenizer.selectNext()
+            return IntVal(token.value), Parser.tokenizer.selectNext()
         elif token.type == 'LPAR':
             result_expression = Parser.parseExpression()
             if Parser.tokenizer.next.type == 'RPAR':
                 return result_expression, Parser.tokenizer.selectNext()
             else:
                 raise SyntaxError("Erro: Parênteses não fechados")
-        # tratamento de operador unário + e -
-        elif token.type == 'MINUS':
+        elif token.type in ['PLUS', 'MINUS']:
+            un_op_node = UnOp(token.value)
             result_factor, token = Parser.parseFactor()
-            if type(result_factor) == int:
-                return -result_factor, token
-            else:
-                raise SyntaxError("Erro: Expressão inválida (esperava um número após -)")
-        elif token.type == 'PLUS':
-            result_factor, token = Parser.parseFactor()
-            if type(result_factor) == int:
-                return result_factor, token
-            else:
-                raise SyntaxError("Erro: Expressão inválida (esperava um número após +)")
+            un_op_node.children.append(result_factor)
+            return un_op_node, token
         else:
             raise SyntaxError("Erro: Token inesperado")
 
@@ -155,12 +233,15 @@ class Parser:
             raise SyntaxError("Erro: Tokens inesperados no final da expressão")
         return result
 
+
 def main():
     if len(sys.argv) < 2:
         sys.exit(1)
-    expression = ' '.join(sys.argv[1:])
-    result = Parser.run(expression)
-    print(result)
+    filename = sys.argv[1]
+    with open(filename, 'r') as file:
+        code = file.read()
+    result = Parser.run(code)
+    print(result.evaluate())
 
 
 if __name__ == "__main__":

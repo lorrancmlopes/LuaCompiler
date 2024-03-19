@@ -6,13 +6,16 @@ RESERVED_KEYWORDS = ['print']
 
 
 # 1. Implementar a árvore sintática abstrata (AST)
+import re
+
 class PrePro:
     @staticmethod
     def filter(code):
-        # Remove comentários e linhas em branco 
-        code = re.sub(r'//.*', '', code)
+        # Remove comentários e linhas em branco
+        code = re.sub(r'\s*--.*', '', code)  # Adicionamos \s* para permitir espaços opcionais antes do comentário
         code = re.sub(r'\n\s*\n', '\n', code)
         return code
+
 
 
 class SymbolTable:
@@ -41,7 +44,8 @@ class Node:
 class Block(Node):
     def evaluate(self, symbol_table):
         for child in self.children:
-            child.evaluate(symbol_table)
+            if child != None:
+                child.evaluate(symbol_table)
 
 
 class Assignment(Node):
@@ -98,16 +102,31 @@ class BinOp(Node):
                 return left.value * right
             elif self.value == '/':
                 return left.value // right
+
+        elif isinstance(left, int) and isinstance(right, int):
+            if self.value == '+':
+                return left + right
+            elif self.value == '-':
+                return left - right
+            elif self.value == '*':
+                return left * right
+            elif self.value == '/':
+                return left // right
         else:
             raise TypeError("Operação não suportada para operandos não inteiros")
 
 
 class UnOp(Node):
-    def evaluate(self, symbol_table):
+    def evaluate(self, symbol_table=None):
         if self.value == '-':
             return -self.children[0].evaluate(symbol_table)
         else:
-            return self.children[0].evaluate(symbol_table)
+            # verifica se é um IntVal ou uma expressão
+            if isinstance(self.children[0], IntVal):
+                return self.children[0].evaluate()
+            else:
+                return self.children[0].evaluate(symbol_table)
+
 
 
 class IntVal(Node):
@@ -334,10 +353,7 @@ class Parser:
     @staticmethod
     def run(code):
         Parser.tokenizer = Tokenizer(code)
-        # chama o parser block para criar a árvore e salva para retornar no final a árvore a ser usada no evaluate
         Parser.parseBlock()
-        # if Parser.tokenizer.next.type != 'EOF':
-        #     raise SyntaxError("Erro: Tokens inesperados no final da expressão")
 
 
 

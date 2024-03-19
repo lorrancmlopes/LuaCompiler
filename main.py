@@ -18,8 +18,6 @@ class PrePro:
         code = '\n'.join([line.rstrip() for line in code.split('\n')])
         return code
 
-
-
 class SymbolTable:
     def __init__(self):
         self.symbol_table = {}
@@ -33,7 +31,6 @@ class SymbolTable:
         else:
             raise NameError(f"Variável '{identifier}' não definida na tabela de símbolos.")
 
-
 class Node:
     def __init__(self, value=None):
         self.value = value
@@ -42,26 +39,21 @@ class Node:
     def evaluate(self):
         pass
 
-
 class Block(Node):
     def evaluate(self, symbol_table):
         for child in self.children:
             if child != None:
                 child.evaluate(symbol_table)
 
-
 class Assignment(Node):
     def evaluate(self, symbol_table):
         identifier = self.children[0]
         value_node = self.children[1]  # Acessando o nó de valor
-
         if isinstance(value_node, IntVal):  # Verificando se o nó de valor é do tipo IntVal
             value = value_node.evaluate()  # Se for, apenas obtemos o valor
         else:
             value = value_node.evaluate(symbol_table)  # Caso contrário, avaliamos a expressão
-
         symbol_table.set(identifier, value)
-
 
 class BinOp(Node):
     def evaluate(self, symbol_table):
@@ -104,7 +96,6 @@ class BinOp(Node):
                 return left.value * right
             elif self.value == '/':
                 return left.value // right
-
         elif isinstance(left, int) and isinstance(right, int):
             if self.value == '+':
                 return left + right
@@ -117,7 +108,6 @@ class BinOp(Node):
         else:
             raise TypeError("Operação não suportada para operandos não inteiros")
 
-
 class UnOp(Node):
     def evaluate(self, symbol_table=None):
         if self.value == '-':
@@ -129,18 +119,13 @@ class UnOp(Node):
             else:
                 return self.children[0].evaluate(symbol_table)
 
-
-
 class IntVal(Node):
     def evaluate(self):
         return self.value
 
-
-
 class NoOp(Node):
     def evaluate(self):
         pass
-
 
 class Print(Node):
     def evaluate(self, symbol_table):
@@ -150,12 +135,10 @@ class Print(Node):
         else:
             print(self.children[0].evaluate(symbol_table))
 
-
 class Token:
     def __init__(self, type: str, value):
         self.type = type
         self.value = value
-
 
 class Tokenizer:
     def __init__(self, source: str):
@@ -214,38 +197,33 @@ class Tokenizer:
             if self.current_char == '(':
                 self.advance()
                 return Token('LPAR', '(')
-
+            
             if self.current_char == ')':
                 self.advance()
                 return Token('RPAR', ')')
-
+            
             if self.current_char == '=':
                 self.advance()
                 return Token('ASSIGN', '=')
-
             # Verificar o caso de ser um identificador de variável (começa com letra e contém letras e números)
             if self.current_char.isalpha():
                 identifier = ''
                 while self.current_char.isalnum() or self.current_char == "_":
                     identifier += self.current_char
                     self.advance()
-
                 if identifier in RESERVED_KEYWORDS:
                     # Se for um print, desvia
                     if identifier == 'print':
                         return Token('PRINT', 'print')
                 return Token('IDENTIFIER', identifier)
-
             # Se não corresponder a nenhum dos tipos de token conhecidos, levanta um erro
             raise SyntaxError("Caractere inválido encontrado: {}".format(self.current_char))
-
         return Token('EOF', '')
 
     def selectNext(self):
         token = self.get_next_token()
         self.next = token
         return token
-
 
 class Parser:
     def __init__(self, tokenizer: Tokenizer):
@@ -305,7 +283,6 @@ class Parser:
         else:
             raise SyntaxError("Erro: Token inesperado após declaração")
 
-
     @staticmethod
     def parseExpression():
         result_expression, token = Parser.parseTerm()
@@ -361,16 +338,12 @@ class Parser:
         Parser.tokenizer = Tokenizer(code)
         Parser.parseBlock()
 
-
-
 def main():
     if len(sys.argv) < 2:
         sys.exit(1)
     filename = sys.argv[1]
     with open(filename, 'r') as file:
         code = file.read()
-#     code = '''x = 3
-# print(x)'''
     try:
         Parser.run(code)
     except Exception as e:

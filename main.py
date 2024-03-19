@@ -14,6 +14,8 @@ class PrePro:
         # Remove comentários e linhas em branco
         code = re.sub(r'\s*--.*', '', code)  # Adicionamos \s* para permitir espaços opcionais antes do comentário
         code = re.sub(r'\n\s*\n', '\n', code)
+        # Remove espaços em branco no final de cada linha com rstrip()
+        code = '\n'.join([line.rstrip() for line in code.split('\n')])
         return code
 
 
@@ -274,20 +276,23 @@ class Parser:
             identifier = token.value
             token = Parser.tokenizer.selectNext()
             if token.type == 'ASSIGN':
-                expression, _ = Parser.parseExpression()
+                expression, next_token = Parser.parseExpression()
+                # Verifica se o próximo token é um /n, se não for, levanta um erro
+                if next_token.type != 'NEWLINE':
+                    raise SyntaxError(f"Erro: Esperado fim de linha, encontrado '{next_token.value}'")
                 assignment_node = Assignment()
                 assignment_node.value = token.value
                 assignment_node.children.append(identifier)
                 assignment_node.children.append(expression)
                 Parser.symbol_table.set(identifier, expression)
                 return assignment_node
-
+            else:
+                raise SyntaxError("Erro: Esperado símbolo de atribuição '=' após identificador")
         # Se o token for um print, verifica se tem um (, expressao e um ). Se sim, cria um nó de print
         elif token.type == 'PRINT':
             token = Parser.tokenizer.selectNext()
             if token.type == 'LPAR':
                 expression, token = Parser.parseExpression()
-                #token = Parser.tokenizer.selectNext() #testando comentar
                 if token.type == 'RPAR':
                     print_node = Print()
                     print_node.value = "print"
@@ -298,7 +303,8 @@ class Parser:
             else:
                 raise SyntaxError("Erro: Parênteses não abertos")
         else:
-            raise SyntaxError("Erro: Token inesperado")
+            raise SyntaxError("Erro: Token inesperado após declaração")
+
 
     @staticmethod
     def parseExpression():
@@ -365,7 +371,10 @@ def main():
         code = file.read()
 #     code = '''x = 3
 # print(x)'''
-    Parser.run(code)
+    try:
+        Parser.run(code)
+    except Exception as e:
+        print(f"Ocorreu um erro durante a execução: {e}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

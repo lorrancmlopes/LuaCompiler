@@ -48,6 +48,9 @@ class Assignment(Node):
         value_node = self.children[1]  # Acessando o nó de valor
         if isinstance(value_node, IntVal):  # Verificando se o nó de valor é do tipo IntVal
             value = value_node.evaluate()  # Se for, apenas obtemos o valor
+        #faz um elif para vericar se é um Read, e aí não passa o symbol_table
+        elif isinstance(value_node, Read):
+            value = value_node.evaluate()
         else:
             value = value_node.evaluate(symbol_table)  # Caso contrário, avaliamos a expressão
         symbol_table.set(identifier, value)
@@ -395,7 +398,16 @@ class Parser:
                         #se tiver else, adiciona o bloco de comandos do else
                         if tem_else:
                             if_node.children.append(block_node_else)
-                        return if_node
+                        #verifica se o próximo token é um \n
+                        token = Parser.tokenizer.selectNext()
+                        if token.type == 'NEWLINE':
+                            return if_node
+                        else:
+                            raise SyntaxError("Erro: Esperado quebra de linha após END")
+                    
+                    
+        else:
+            raise SyntaxError("Erro: Comando inválido")
 
     @staticmethod
     def parseExpression():
@@ -484,8 +496,21 @@ class Parser:
             un_op_node.children.append(result_factor)
             return un_op_node, token
         elif token.type == 'READ':
-            #se encontrar um read, cria um nó de leitura de entrada de um int do teclado
-            return IntVal(int(input())), Parser.tokenizer.selectNext()
+            #ver se tem ( e ) e se o próximo token é um \n
+            token = Parser.tokenizer.selectNext()
+            if token.type == 'LPAR':
+                token = Parser.tokenizer.selectNext()
+                if token.type == 'RPAR':
+                    token = Parser.tokenizer.selectNext()
+                    if token.type == 'NEWLINE':
+                        return Read(token.value), token
+                    else:
+                        raise SyntaxError("Erro: Esperado '\n' após comando de leitura")
+                else:
+                    raise SyntaxError("Erro: Parênteses não fechados")
+            else:
+                raise SyntaxError("Erro: Parênteses não abertos")
+
         else:
             raise SyntaxError("Erro: Token inesperado")
         

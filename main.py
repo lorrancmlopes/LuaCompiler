@@ -1,18 +1,15 @@
 import sys
 import re
+import time
 
 # Palavras reservadas
-RESERVED_KEYWORDS = ['print']
-
-
-# 1. Implementar a árvore sintática abstrata (AST)
-import re
+RESERVED_KEYWORDS = ['print', 'if', 'else', 'while','then','end','do', 'or', 'and', 'not', 'read'] # atulizando v2.2
 
 class PrePro:
     @staticmethod
     def filter(code):
         # Remove comentários e linhas em branco
-        code = re.sub(r'\s*--.*', '', code)  # Adicionamos \s* para permitir espaços opcionais antes do comentário
+        code = re.sub(r'\s*--.*', '', code)  
         code = re.sub(r'\n\s*\n', '\n', code)
         # Remove espaços em branco no final de cada linha com rstrip()
         code = '\n'.join([line.rstrip() for line in code.split('\n')])
@@ -66,52 +63,42 @@ class BinOp(Node):
         if not isinstance(right, IntVal):
             right = right.evaluate(symbol_table)
 
-        if isinstance(left, IntVal) and isinstance(right, IntVal):
-            if self.value == '+':
-                return left.value + right.value
-            elif self.value == '-':
-                return left.value - right.value
-            elif self.value == '*':
-                return left.value * right.value
-            elif self.value == '/':
-                return left.value // right.value
-            else:
-                raise TypeError("Operação não suportada para operandos não inteiros")
-        # Se pelo menos uma das partes for um inteiro, tratamos esse caso separadamente
-        elif isinstance(left, int) and isinstance(right, IntVal):
-            if self.value == '+':
-                return left + right.value
-            elif self.value == '-':
-                return left - right.value
-            elif self.value == '*':
-                return left * right.value
-            elif self.value == '/':
-                return left // right.value
-        elif isinstance(left, IntVal) and isinstance(right, int):
-            if self.value == '+':
-                return left.value + right
-            elif self.value == '-':
-                return left.value - right
-            elif self.value == '*':
-                return left.value * right
-            elif self.value == '/':
-                return left.value // right
-        elif isinstance(left, int) and isinstance(right, int):
-            if self.value == '+':
-                return left + right
-            elif self.value == '-':
-                return left - right
-            elif self.value == '*':
-                return left * right
-            elif self.value == '/':
-                return left // right
+        #Alterando a gambiarra da versão 2.1 ue verificava IntVal e int de cada lado:
+        #se right não for IntVal, transforma em IntVal right e left
+        if not isinstance(right, IntVal):
+            right = IntVal(right)
+        if not isinstance(left, IntVal):
+            left = IntVal(left)
+        #Operações binárias
+        if self.value == '+':
+            return left.value + right.value
+        elif self.value == '-':
+            return left.value - right.value
+        elif self.value == '*':
+            return left.value * right.value
+        elif self.value == '/':
+            return left.value // right.value
+        #adicionar operadores de comparação and, or, ==, <, >:
+        elif self.value == 'or':
+            return left.value or right.value
+        elif self.value == 'and':
+            return left.value and right.value
+        elif self.value == '==':
+            return left.value == right.value
+        elif self.value == '<':
+            return left.value < right.value
+        elif self.value == '>':
+            return left.value > right.value
         else:
             raise TypeError("Operação não suportada para operandos não inteiros")
-
+        
 class UnOp(Node):
     def evaluate(self, symbol_table=None):
         if self.value == '-':
             return -self.children[0].evaluate(symbol_table)
+        #adicionar operador de negação
+        elif self.value == 'not':
+            return not self.children[0].evaluate(symbol_table)
         else:
             # verifica se é um IntVal ou uma expressão
             if isinstance(self.children[0], IntVal):
@@ -122,6 +109,14 @@ class UnOp(Node):
 class IntVal(Node):
     def evaluate(self):
         return self.value
+    
+class Identifier(Node):
+    def evaluate(self, symbol_table):
+        return symbol_table.get(self.value)
+    
+class Read(Node):
+    def evaluate(self):
+        return int(input())
 
 class NoOp(Node):
     def evaluate(self):
@@ -134,6 +129,31 @@ class Print(Node):
             print(self.children[0].evaluate())
         else:
             print(self.children[0].evaluate(symbol_table))
+
+class While(Node):
+    def evaluate(self, symbol_table):
+        # print(self.children[0].children)
+        # raise
+        while self.children[0].evaluate(symbol_table): # reavalia a condição em cada iteração
+            #print(f"ST: {symbol_table.symbol_table}") 
+            self.children[1].evaluate(symbol_table)
+            #print(f"ST: {symbol_table.symbol_table}\n") #debug
+            #time.sleep(1) 
+
+class If(Node):
+    def evaluate(self, symbol_table):
+        expression = self.children[0] #condição do if
+        block = self.children[1] #bloco de comandos
+        #verifica o len do nó, se for 3, tem um else
+        if len(self.children) == 3:
+            block_else = self.children[2] #bloco de comandos do else
+            if expression.evaluate(symbol_table):
+                block.evaluate(symbol_table)
+            else:
+                block_else.evaluate(symbol_table)
+        else:
+            if expression.evaluate(symbol_table):
+                block.evaluate(symbol_table)
 
 class Token:
     def __init__(self, type: str, value):
@@ -204,7 +224,19 @@ class Tokenizer:
             
             if self.current_char == '=':
                 self.advance()
-                return Token('ASSIGN', '=')
+                if self.current_char == '=':
+                    self.advance()
+                    return Token('EQUALS', '==')
+                else:
+                    return Token('ASSIGN', '=')
+            # operador de comparação booleana
+            if self.current_char == '<':
+                self.advance()
+                return Token('LT', '<')
+            if self.current_char == '>':
+                self.advance()
+                return Token('GT', '>')
+                
             # Verificar o caso de ser um identificador de variável (começa com letra e contém letras e números)
             if self.current_char.isalpha():
                 identifier = ''
@@ -215,6 +247,27 @@ class Tokenizer:
                     # Se for um print, desvia
                     if identifier == 'print':
                         return Token('PRINT', 'print')
+                    #checando para os novos elementos da lista de palavras reservadas
+                    elif identifier == 'if':
+                        return Token('IF', 'if')
+                    elif identifier == 'else':
+                        return Token('ELSE', 'else')
+                    elif identifier == 'while':
+                        return Token('WHILE', 'while')
+                    elif identifier == 'do':
+                        return Token('DO', 'do')
+                    elif identifier == 'end':
+                        return Token('END', 'end')
+                    elif identifier == 'then':
+                        return Token('THEN', 'then')
+                    elif identifier == 'or':
+                        return Token('OR', 'or')
+                    elif identifier == 'and':
+                        return Token('AND', 'and')
+                    elif identifier == 'not':
+                        return Token('NOT', 'not')
+                    elif identifier == 'read':
+                        return Token('READ', 'read')
                 return Token('IDENTIFIER', identifier)
             # Se não corresponder a nenhum dos tipos de token conhecidos, levanta um erro
             raise SyntaxError("Caractere inválido encontrado: {}".format(self.current_char))
@@ -254,10 +307,10 @@ class Parser:
             identifier = token.value
             token = Parser.tokenizer.selectNext()
             if token.type == 'ASSIGN':
-                expression, next_token = Parser.parseExpression()
+                expression, next_token = Parser.parseBooleanExpression()
                 # Verifica se o próximo token é um /n, se não for, levanta um erro
-                if next_token.type != 'NEWLINE':
-                    raise SyntaxError(f"Erro: Esperado fim de linha, encontrado '{next_token.value}'")
+                # if next_token.type != 'NEWLINE':
+                #     raise SyntaxError(f"Erro: Esperado fim de linha, encontrado '{next_token.value}'")
                 assignment_node = Assignment()
                 assignment_node.value = token.value
                 assignment_node.children.append(identifier)
@@ -270,7 +323,7 @@ class Parser:
         elif token.type == 'PRINT':
             token = Parser.tokenizer.selectNext()
             if token.type == 'LPAR':
-                expression, token = Parser.parseExpression()
+                expression, token = Parser.parseBooleanExpression()
                 if token.type == 'RPAR':
                     print_node = Print()
                     print_node.value = "print"
@@ -280,8 +333,69 @@ class Parser:
                     raise SyntaxError("Erro: Parênteses não fechados")
             else:
                 raise SyntaxError("Erro: Parênteses não abertos")
-        else:
-            raise SyntaxError("Erro: Token inesperado após declaração")
+        #adicionando a estrutura de repetição while considerando a lingugagem Lua 
+        elif token.type == 'WHILE': #precisa ser WHILE, BooleanExpression, DO, \n, Statement até achar um END. Se não achar end, levanta um erro
+            expression, token = Parser.parseBooleanExpression()
+            if token.type == 'DO':
+                #verificar se o próximo token é um \n
+                token = Parser.tokenizer.selectNext()
+                if token.type == 'NEWLINE':
+                    block_node = Block()
+                    token = Parser.tokenizer.selectNext()
+                    while token.type != 'END':
+                        #verifica se o token é um EOF e lança um erro
+                        if token.type == 'EOF':
+                            raise SyntaxError("Erro: Esperado 'END' ao usar While")
+                        statement = Parser.parseStatement(token)
+                        block_node.children.append(statement)
+                        token = Parser.tokenizer.selectNext()
+                    while_node = While()
+                    while_node.children.append(expression)
+                    while_node.children.append(block_node)
+                    return while_node
+                else:
+                    raise SyntaxError("Erro: Esperado '\n' após DO")
+            #adicionar erro se não tiver o DO
+            else:
+                raise SyntaxError("Erro: Esperado 'DO' após a expressão booleana")
+        elif token.type == 'IF':
+            tem_else = False
+            expression, token = Parser.parseBooleanExpression()
+            if token.type == 'THEN':
+                #verificar se o próximo token é um \n
+                token = Parser.tokenizer.selectNext()
+                if token.type == 'NEWLINE':
+                    block_node = Block()
+                    token = Parser.tokenizer.selectNext()
+                    # não precisa ter um else, mas precisa ter um end pois é lua
+                    while token.type != 'END':
+                        #verifica se o token é um EOF e lança um erro
+                        if token.type == 'EOF':
+                            raise SyntaxError("Erro: Esperado 'END' ao usar If")
+                        statement = Parser.parseStatement(token)
+                        block_node.children.append(statement)
+                        token = Parser.tokenizer.selectNext()
+                        if token.type == 'ELSE':
+                            tem_else = True
+                            token = Parser.tokenizer.selectNext()
+                            if token.type == 'NEWLINE':
+                                block_node_else = Block()
+                                token = Parser.tokenizer.selectNext()
+                                while token.type != 'END':
+                                    statement = Parser.parseStatement(token)
+                                    block_node_else.children.append(statement)
+                                    token = Parser.tokenizer.selectNext()
+                                break
+                            else:
+                                raise SyntaxError("Erro: Esperado '\n' após ELSE")
+                    if token.type == 'END':
+                        if_node = If()
+                        if_node.children.append(expression)
+                        if_node.children.append(block_node)
+                        #se tiver else, adiciona o bloco de comandos do else
+                        if tem_else:
+                            if_node.children.append(block_node_else)
+                        return if_node
 
     @staticmethod
     def parseExpression():
@@ -295,6 +409,45 @@ class Parser:
             result_expression = bin_op_node
         return result_expression, token
 
+    #criando o método RelationalExpression, que é uma expressão que pode conter operadores de comparação ==, <, >
+    @staticmethod
+    def parseRelationalExpression():
+        result_expression, token = Parser.parseExpression()
+        while token.type in ["LT", "GT", "EQUALS"]:
+            op = token.value
+            result_term, token = Parser.parseExpression()
+            bin_op_node = BinOp(op)
+            bin_op_node.children.append(result_expression)
+            bin_op_node.children.append(result_term)
+            result_expression = bin_op_node
+        return result_expression, token
+    
+    #criando o método BooleanTerm, que é uma expressão que pode conter o operator 'and'. 
+    @staticmethod
+    def parseBooleanTerm():
+        result_expression, token = Parser.parseRelationalExpression()
+        while token.type == "AND":
+            op = token.value
+            result_term, token = Parser.parseRelationalExpression()
+            bin_op_node = BinOp(op)
+            bin_op_node.children.append(result_expression)
+            bin_op_node.children.append(result_term)
+            result_expression = bin_op_node
+        return result_expression, token
+    
+    #criando o método BooleanExpression, que é uma expressão que pode conter o operator 'or'.
+    @staticmethod
+    def parseBooleanExpression():
+        result_expression, token = Parser.parseBooleanTerm()
+        while token.type == "OR":
+            op = token.value
+            result_term, token = Parser.parseBooleanTerm()
+            bin_op_node = BinOp(op)
+            bin_op_node.children.append(result_expression)
+            bin_op_node.children.append(result_term)
+            result_expression = bin_op_node
+        return result_expression, token
+    
     @staticmethod
     def parseTerm():
         result_term, token = Parser.parseFactor()
@@ -316,22 +469,26 @@ class Parser:
         elif token.type == 'IDENTIFIER':
             identifier = token.value
             if Parser.symbol_table.get(identifier):
-                return Parser.symbol_table.get(identifier), Parser.tokenizer.selectNext()
+                return Identifier(token.value), Parser.tokenizer.selectNext()
             else:
                 raise NameError(f"Variável '{identifier}' não definida na tabela de símbolos.")
         elif token.type == 'LPAR':
-            result_expression, _ = Parser.parseExpression()
+            result_expression, _ = Parser.parseBooleanExpression()
             if Parser.tokenizer.next.type == 'RPAR':
                 return result_expression, Parser.tokenizer.selectNext()
             else:
                 raise SyntaxError("Erro: Parênteses não fechados")
-        elif token.type in ['PLUS', 'MINUS']:
+        elif token.type in ['PLUS', 'MINUS', 'NOT']:
             un_op_node = UnOp(token.value)
             result_factor, token = Parser.parseFactor()
             un_op_node.children.append(result_factor)
             return un_op_node, token
+        elif token.type == 'READ':
+            #se encontrar um read, cria um nó de leitura de entrada de um int do teclado
+            return IntVal(int(input())), Parser.tokenizer.selectNext()
         else:
             raise SyntaxError("Erro: Token inesperado")
+        
 
     @staticmethod
     def run(code):

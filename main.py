@@ -309,8 +309,8 @@ class Parser:
             if token.type == 'ASSIGN':
                 expression, next_token = Parser.parseBooleanExpression()
                 # Verifica se o próximo token é um /n, se não for, levanta um erro
-                # if next_token.type != 'NEWLINE':
-                #     raise SyntaxError(f"Erro: Esperado fim de linha, encontrado '{next_token.value}'")
+                if next_token.type != 'NEWLINE':
+                    raise SyntaxError(f"Erro: Esperado fim de linha, encontrado '{next_token.value}'")
                 assignment_node = Assignment()
                 assignment_node.value = token.value
                 assignment_node.children.append(identifier)

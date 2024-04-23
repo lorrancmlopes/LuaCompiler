@@ -181,6 +181,8 @@ class IntVal(Node):
 
 class Identifier(Node):
     def evaluate(self, symbol_table):
+        if symbol_table.get(self.value) is None:
+            raise NameError(f"Variável '{self.value}' não definida na tabela de símbolos!")
         return symbol_table.get(self.value)
 
 
@@ -432,7 +434,7 @@ class Parser:
             if token.type == 'IDENTIFIER':
                 identifier = token.value
                 token = Parser.tokenizer.selectNext()
-                if type(Parser.symbol_table.get(identifier)) is None:
+                if type(Parser.symbol_table.get(identifier)) is str:
                     raise NameError(f"Variável '{identifier}' já declarada!!")
                 # verifica se já faz assign na criação
                 if token.type == 'ASSIGN':
@@ -447,7 +449,7 @@ class Parser:
                     Parser.symbol_table.set(identifier, expression)
                     return assignment_node
                 elif token.type == 'NEWLINE':
-                    Parser.symbol_table.set(identifier, "")
+                    Parser.symbol_table.set(identifier, "_")
                     return
                 else:
                     raise SyntaxError("Erro: Esperado símbolo de atribuição '=' após identificador ou quebra de linha")

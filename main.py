@@ -1,6 +1,5 @@
 import sys
 import re
-import time
 
 # Palavras reservadas
 RESERVED_KEYWORDS = ['print', 'if', 'else', 'while', 'then', 'end', 'do', 'or', 'and', 'not', 'read',
@@ -413,8 +412,8 @@ class Parser:
             identifier = token.value
             token = Parser.tokenizer.selectNext()
             if token.type == 'ASSIGN':
-                # verifica se o identificador ainda não foi definido	( precisa estar na tabela de símbolos para fazer assign)
-                #if type(Parser.symbol_table.get(identifier)): # tentando resolver while, comentei aqui essa linha 
+                if Parser.symbol_table.get(identifier) is None:
+                    raise NameError(f"Variável '{identifier}' não definida na tabela de símbolos!")
                 expression, next_token = Parser.parseBooleanExpression()
                 # Verifica se o próximo token é um /n, se não for, levanta um erro
                 if next_token.type != 'NEWLINE':
@@ -423,7 +422,7 @@ class Parser:
                 assignment_node.value = token.value
                 assignment_node.children.append(identifier)
                 assignment_node.children.append(expression)
-                Parser.symbol_table.set(identifier, expression) # e comentei essa tentando resolver While
+                Parser.symbol_table.set(identifier, expression) 
                 return assignment_node
             else:
                 raise SyntaxError("Erro: Esperado símbolo de atribuição '=' após identificador")
@@ -433,11 +432,8 @@ class Parser:
             if token.type == 'IDENTIFIER':
                 identifier = token.value
                 token = Parser.tokenizer.selectNext()
-                #print(f"symbol_table: {Parser.symbol_table.symbol_table}")
-                #print(Parser.symbol_table.get(identifier))
-                #verifica se já existe na tabela de símbolos, se sim, levanta um erro
-                if Parser.symbol_table.get(identifier) or Parser.symbol_table.get(identifier) == None:
-                    raise NameError(f"Variável '{identifier}' já declarada.")
+                if type(Parser.symbol_table.get(identifier)) is None:
+                    raise NameError(f"Variável '{identifier}' já declarada!!")
                 # verifica se já faz assign na criação
                 if token.type == 'ASSIGN':
                     expression, next_token = Parser.parseBooleanExpression()
@@ -451,7 +447,7 @@ class Parser:
                     Parser.symbol_table.set(identifier, expression)
                     return assignment_node
                 elif token.type == 'NEWLINE':
-                    Parser.symbol_table.set(identifier, None)
+                    Parser.symbol_table.set(identifier, "")
                     return
                 else:
                     raise SyntaxError("Erro: Esperado símbolo de atribuição '=' após identificador ou quebra de linha")

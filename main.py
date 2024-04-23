@@ -28,9 +28,6 @@ class SymbolTable:
     def get(self, identifier):
         if identifier in self.symbol_table:
             return self.symbol_table[identifier]
-        else:
-            raise NameError(f"Variável '{identifier}' não definida na tabela de símbolos.")
-
 
 class Node:
     def __init__(self, value=None):
@@ -62,6 +59,7 @@ class Assignment(Node):
             value = value_node.evaluate()
         else:
             value = value_node.evaluate(symbol_table)  # Caso contrário, avaliamos a expressão
+        symbol_table.set(identifier, value)
 
 
 class BinOp(Node):
@@ -76,60 +74,83 @@ class BinOp(Node):
 
         # adicionar operador de concatenação
         if self.value == '..':
-            #print(f"left: {left} right: {right}")
-            # if not isinstance(left, String):
-            #     left = String((str(left.value[0]), 'STRING'))
-            if not isinstance(right, String):
+            #print(f"left: {left} right: {right} ...")
+            #print(isinstance(left, IntVal))
+            if isinstance(left, IntVal):
+                 left = String((str(left.value[0]), 'STRING'))
+                 #print(f"left: {left}")
+            if isinstance(right, IntVal):
                 right = String((str(right.value[0]), 'STRING'))
-           # print(f"left: {left} right: {right}")
+            #print(f"isinstance(left, tuple): {isinstance(left, tuple)}")
+            if isinstance(left, tuple) and isinstance(right, tuple):
+                return String((left[0] + right[0], 'STRING'))
+            elif isinstance(left, String) and isinstance(right, tuple):
+                return String((left.value[0] + right[0], 'STRING'))
+            # print(f"left: {left} right: {right}")
             # print(String((left.value[0] + right.value[0], 'STRING')))
             if not isinstance(left, String) or not isinstance(right, String):
                 #print(f"-------------------------------------")
                 #print(f"left: {left} right.value[0]: {right.value[0]}")
                 #print(f"-------------------------------------")
                 #print(f"{left[0] + right.value[0]}")
-                return (left[0] + right.value[0], 'STRING')
-            return (left.value[0] + right.value[0], 'STRING')
+                return String((left[0] + right.value[0], 'STRING'))
+            return String((left.value[0] + right.value[0], 'STRING'))
 
         # Alterando a gambiarra da versão 2.1 ue verificava IntVal e int de cada lado:
         # se right não for IntVal, transforma em IntVal right e left
-        if not isinstance(right, IntVal):
-            right = IntVal(right.value)
-        if not isinstance(left, IntVal):
-            left = IntVal(left.value)
+        # if not isinstance(right, IntVal):
+        #     right = IntVal(right.value)
+        # if not isinstance(left, IntVal):
+        #     left = IntVal(left.value)
         # Operações binárias
         if self.value == '+':
-            #print(left.value[0] + right.value[0], 'INT')
-            return left.value[0] + right.value[0], 'INT'
+            return IntVal((left.value[0] + right.value[0], 'INT'))
         elif self.value == '-':
-            return left.value[0] - right.value[0], 'INT'
+            return IntVal((left.value[0] - right.value[0], 'INT'))
         elif self.value == '*':
-            return left.value[0] * right.value[0], 'INT'
+            return IntVal((left.value[0] * right.value[0], 'INT'))
         elif self.value == '/':
-            return left.value[0] // right.value[0], 'INT'
+            return IntVal((left.value[0] // right.value[0], 'INT'))
         # adicionar operadores de comparação and, or, ==, <, >:
         elif self.value == 'or':
-            if left.value or right.value:
-                return (1, 'INT')
-            return (0, 'INT')
+            if left.value[1] == 'INT' and right.value[1] == 'INT':
+                if left.value[0] or right.value[0]:
+                    return IntVal((1, 'INT'))
+                return IntVal((0, 'INT'))
+            raise TypeError("Operação não suportada para os valores tipos fornecidos")
         elif self.value == 'and':
             if left.value[1] == 'INT' and right.value[1] == 'INT':
                 if left.value[0] and right.value[0]:
-                    return (1, 'INT')   
-                return (0, 'INT')
+                    return IntVal((1, 'INT'))
+                return IntVal((0, 'INT'))
             raise TypeError("Operação não suportada para os valores tipos fornecidos")
         elif self.value == '==':
-            if left.value[0] == right.value[0]:
-                return IntVal((1, 'INT'))
-            return (0, 'INT')
+            if (isinstance(left, String) or isinstance(left, IntVal)) and (isinstance(right, String) or isinstance(right, IntVal)):
+                if left.value[0] == right.value[0]:
+                    return IntVal((1, 'INT'))
+                return IntVal((0, 'INT'))
+            elif isinstance(left, tuple) and isinstance(right, tuple):
+                if left[0] == right[0]:
+                    return IntVal((1, 'INT'))
+                return IntVal((0, 'INT'))
         elif self.value == '<':
-            if left.value < right.value:
-                return (1, 'INT')
-            return (0, 'INT')
+            if (isinstance(left, String) or isinstance(left, IntVal)) and (isinstance(right, String) or isinstance(right, IntVal)):
+                if left.value[0] < right.value[0]:
+                    return IntVal((1, 'INT'))
+                return IntVal((0, 'INT'))
+            elif isinstance(left, tuple) and isinstance(right, tuple):
+                if left[0] < right[0]:
+                    return IntVal((1, 'INT'))
+                return IntVal((0, 'INT'))
         elif self.value == '>':
-            if left.value > right.value:
-                return (1, 'INT')
-            return (0, 'INT')
+            if (isinstance(left, String) or isinstance(left, IntVal)) and (isinstance(right, String) or isinstance(right, IntVal)):
+                if left.value[0] > right.value[0]:
+                    return IntVal((1, 'INT'))
+                return IntVal((0, 'INT'))
+            elif isinstance(left, tuple) and isinstance(right, tuple):
+                if left[0] > right[0]:
+                    return IntVal((1, 'INT'))
+                return IntVal((0, 'INT'))
         else:
             raise TypeError("Operação não suportada para os valores fornecidos")
 
@@ -137,10 +158,15 @@ class BinOp(Node):
 class UnOp(Node):
     def evaluate(self, symbol_table=None):
         if self.value == '-':
-            return -self.children[0].evaluate(symbol_table)
+            #print(f"Estou no UnOp")
+            #print(f"O retorno é: {IntVal((-self.children[0].evaluate(symbol_table).value[0], 'INT'))}")
+            return IntVal((-self.children[0].evaluate(symbol_table).value[0], 'INT'))
         # adicionar operador de negação
         elif self.value == 'not':
-            return not self.children[0].evaluate(symbol_table)
+            bool = not self.children[0].evaluate(symbol_table)
+            if bool:
+                return IntVal((1, 'INT'))
+            return IntVal((0, 'INT'))
         else:
             # verifica se é um IntVal ou uma expressão
             if isinstance(self.children[0], IntVal):
@@ -151,27 +177,22 @@ class UnOp(Node):
 
 class IntVal(Node):
     def evaluate(self):
-        return (self.value, 'INT')
+        return IntVal(self.value)
 
 
 class Identifier(Node):
     def evaluate(self, symbol_table):
-        #print(symbol_table.get(self.value).evaluate(symbol_table))
-        #verifica o tipo da variável para ver se é operação ou valor para passar symbol_table ou não
-        if isinstance(symbol_table.get(self.value), IntVal) or isinstance(symbol_table.get(self.value), String):
-            return symbol_table.get(self.value).evaluate()
-        else:
-            return symbol_table.get(self.value).evaluate(symbol_table)
+        return symbol_table.get(self.value)
 
 
 class Read(Node):
     def evaluate(self):
-        return (int(input()), 'INT')
+        return IntVal((int(input()), 'INT'))
 
 
 class Concat(Node):
     def evaluate(self, symbol_table):
-        return self.children[0].evaluate(symbol_table) + self.children[1].evaluate(symbol_table), 'STRING'
+        return String((self.children[0].evaluate(symbol_table) + self.children[1].evaluate(symbol_table), 'STRING'))
 
 # Adicionando Strigs
 class String(Node):
@@ -190,19 +211,18 @@ class Print(Node):
         if isinstance(self.children[0], IntVal) or isinstance(self.children[0], String):
             print(self.children[0].evaluate())
         else:
-            # print(f"self.children[0].evaluate(symbol_table): {self.children[0].evaluate(symbol_table)}")
-            print(self.children[0].evaluate(symbol_table)[0])
+            #print(f"self.children[0].evaluate(symbol_table): {self.children[0].evaluate(symbol_table).value}")
+            print(self.children[0].evaluate(symbol_table).value[0])
 
 
 class While(Node):
     def evaluate(self, symbol_table):
-        # print(self.children[0].children)
+        #print(self.children[0].children)
         # raise
-        while self.children[0].evaluate(symbol_table):  # reavalia a condição em cada iteração
+        while self.children[0].evaluate(symbol_table).value[0]:  # reavalia a condição em cada iteração
             # print(f"ST: {symbol_table.symbol_table}")
             self.children[1].evaluate(symbol_table)
-            # print(f"ST: {symbol_table.symbol_table}\n") #debug
-            # time.sleep(1)
+            #print(f"ST: {symbol_table.symbol_table['x_1']}") #debug
 
 
 class If(Node):
@@ -323,7 +343,7 @@ class Tokenizer:
             # Verificar o caso de ser um identificador de variável (começa com letra e contém letras e números)
             if self.current_char.isalpha():
                 identifier = ''
-                while self.current_char.isalnum() or self.current_char == "_":
+                while self.current_char is not None and self.current_char.isalnum() or self.current_char == "_":
                     identifier += self.current_char
                     self.advance()
                 if identifier in RESERVED_KEYWORDS:
@@ -394,19 +414,17 @@ class Parser:
             token = Parser.tokenizer.selectNext()
             if token.type == 'ASSIGN':
                 # verifica se o identificador ainda não foi definido	( precisa estar na tabela de símbolos para fazer assign)
-                if type(Parser.symbol_table.get(identifier)):
-                    expression, next_token = Parser.parseBooleanExpression()
-                    # Verifica se o próximo token é um /n, se não for, levanta um erro
-                    if next_token.type != 'NEWLINE':
-                        raise SyntaxError(f"Erro: Esperado fim de linha, encontrado '{next_token.value}'")
-                    assignment_node = Assignment()
-                    assignment_node.value = token.value
-                    assignment_node.children.append(identifier)
-                    assignment_node.children.append(expression)
-                    Parser.symbol_table.set(identifier, expression)
-                    return assignment_node
-                else:
-                    raise NameError(f"Variável '{identifier}' não declarada.")
+                #if type(Parser.symbol_table.get(identifier)): # tentando resolver while, comentei aqui essa linha 
+                expression, next_token = Parser.parseBooleanExpression()
+                # Verifica se o próximo token é um /n, se não for, levanta um erro
+                if next_token.type != 'NEWLINE':
+                    raise SyntaxError(f"Erro: Esperado fim de linha, encontrado '{next_token.value}'")
+                assignment_node = Assignment()
+                assignment_node.value = token.value
+                assignment_node.children.append(identifier)
+                assignment_node.children.append(expression)
+                Parser.symbol_table.set(identifier, expression) # e comentei essa tentando resolver While
+                return assignment_node
             else:
                 raise SyntaxError("Erro: Esperado símbolo de atribuição '=' após identificador")
         # Criação de variável (local)
@@ -415,6 +433,11 @@ class Parser:
             if token.type == 'IDENTIFIER':
                 identifier = token.value
                 token = Parser.tokenizer.selectNext()
+                #print(f"symbol_table: {Parser.symbol_table.symbol_table}")
+                #print(Parser.symbol_table.get(identifier))
+                #verifica se já existe na tabela de símbolos, se sim, levanta um erro
+                if Parser.symbol_table.get(identifier) or Parser.symbol_table.get(identifier) == None:
+                    raise NameError(f"Variável '{identifier}' já declarada.")
                 # verifica se já faz assign na criação
                 if token.type == 'ASSIGN':
                     expression, next_token = Parser.parseBooleanExpression()
@@ -425,11 +448,6 @@ class Parser:
                     assignment_node.value = token.value
                     assignment_node.children.append(identifier)
                     assignment_node.children.append(expression)
-                    # tipo para o symbol_table (INT ou STRING)
-                    # if token.type == 'INT':
-                    #     Parser.symbol_table.set(identifier, expression, 'INT')
-                    # else:
-                    #     Parser.symbol_table.set(identifier, expression, 'STRING')
                     Parser.symbol_table.set(identifier, expression)
                     return assignment_node
                 elif token.type == 'NEWLINE':
@@ -600,10 +618,11 @@ class Parser:
         # Se for um identificador, verifica se está na tabela de símbolos
         elif token.type == 'IDENTIFIER':
             identifier = token.value
-            if Parser.symbol_table.get(identifier):
-                return Identifier(token.value), Parser.tokenizer.selectNext()
-            else:
-                raise NameError(f"Variável '{identifier}' não definida na tabela de símbolos.")
+            # if Parser.symbol_table.get(identifier):
+            return Identifier(token.value), Parser.tokenizer.selectNext()
+            #comentei tentando resolver while
+            # else:
+            #     raise NameError(f"Variável '{identifier}' não definida na tabela de símbolos!.")
         elif token.type == 'LPAR':
             result_expression, _ = Parser.parseBooleanExpression()
             if Parser.tokenizer.next.type == 'RPAR':

@@ -394,33 +394,27 @@ class If(Node):
     def evaluate(self, symbol_table):
         expression = self.children[0]  # condição do if
         block = self.children[1]  # bloco de comandos
-
-        # Rótulo de início do if
         AssemblyWriter.write_instructions(f"IF_{self.id}:\n")
-        # Avaliar a expressão e armazenar o resultado em EAX
-        expression.evaluate(symbol_table)
-        AssemblyWriter.write_instructions(f"CMP EAX, False\n")  # Comparar EAX com False (0)
-
-        # Verifica se há um bloco 'else'
+        # verifica o len do nó, se for 3, tem um else
         if len(self.children) == 3:
             block_else = self.children[2]  # bloco de comandos do else
-            # Salto para 'else' se a condição for falsa
-            AssemblyWriter.write_instructions(f"JE ELSE_{self.id}\n")
-            # Executa o bloco 'if'
-            block.evaluate(symbol_table)
-            # Pula o bloco 'else' após o 'if'
-            AssemblyWriter.write_instructions(f"JMP EXIT_IF_{self.id}\n")
-            # Início do bloco 'else'
-            AssemblyWriter.write_instructions(f"ELSE_{self.id}:\n")
-            block_else.evaluate(symbol_table)
+            if expression.evaluate(symbol_table).value[0]:
+                AssemblyWriter.write_instructions(f"CMP EAX, False\n")
+                AssemblyWriter.write_instructions(f"JE ELSE_{self.id}\n")
+                block.evaluate(symbol_table)
+                AssemblyWriter.write_instructions(f"JMP ENDIF_{self.id}\n")
+            else:
+                AssemblyWriter.write_instructions(f"CMP EAX, False\n")
+                AssemblyWriter.write_instructions(f"JE ELSE_{self.id}\n")
+                AssemblyWriter.write_instructions(f"ELSE_{self.id}:\n")
+                block_else.evaluate(symbol_table)
+                AssemblyWriter.write_instructions(f"JMP ENDIF_{self.id}\n")
         else:
-            # Salto para o fim se a condição for falsa
-            AssemblyWriter.write_instructions(f"JE EXIT_IF_{self.id}\n")
-            # Executa o bloco 'if'
-            block.evaluate(symbol_table)
-
-        # Fim do bloco 'if'
-        AssemblyWriter.write_instructions(f"EXIT_IF_{self.id}:\n")
+            if expression.evaluate(symbol_table).value[0]:
+                AssemblyWriter.write_instructions(f"CMP EAX, False\n")
+                AssemblyWriter.write_instructions(f"JE ENDIF_{self.id}\n")
+                block.evaluate(symbol_table)
+        AssemblyWriter.write_instructions(f"ENDIF_{self.id}:\n")
 
 class Token:
     def __init__(self, type: str, value):
@@ -722,8 +716,6 @@ class Parser:
                             return if_node
                         else:
                             raise SyntaxError("Erro: Esperado quebra de linha após END")
-
-
         else:
             raise SyntaxError("Erro: Comando inválido")
 
@@ -831,10 +823,8 @@ class Parser:
                     raise SyntaxError("Erro: Parênteses não fechados")
             else:
                 raise SyntaxError("Erro: Parênteses não abertos")
-
         else:
             raise SyntaxError(f"Erro: Token inesperado: {token.value}")
-
     @staticmethod
     def run(code):
         Parser.tokenizer = Tokenizer(code)

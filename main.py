@@ -5,6 +5,87 @@ import re
 RESERVED_KEYWORDS = ['print', 'if', 'else', 'while', 'then', 'end', 'do', 'or', 'and', 'not', 'read',
                      'local']  # atulizando v2.3 (local)
 
+cabecalho = '''
+; constantes
+SYS_EXIT equ 1
+SYS_READ equ 3
+SYS_WRITE equ 4
+STDIN equ 0
+STDOUT equ 1
+True equ 1
+False equ 0
+
+segment .data
+
+formatin: db "%d", 0
+formatout: db "%d", 10, 0 ; newline, nul terminator
+scanint: times 4 db 0 ; 32-bits integer = 4 bytes
+
+segment .bss  ; variaveis
+res RESB 1
+
+section .text
+global main ; linux
+extern scanf ; linux
+extern printf ; linux
+extern fflush ; linux
+extern stdout ; linux
+
+; subrotinas if/while
+binop_je:
+JE binop_true
+JMP binop_false
+
+binop_jg:
+JG binop_true
+JMP binop_false
+
+binop_jl:
+JL binop_true
+JMP binop_false
+
+binop_false:
+MOV EAX, False  
+JMP binop_exit
+binop_true:
+MOV EAX, True
+binop_exit:
+RET
+
+main:
+
+PUSH EBP ; guarda o base pointer
+MOV EBP, ESP ; estabelece um novo base pointer
+
+; codigo gerado pelo compilador abaixo
+'''
+
+rodape = '''
+; interrupcao de saida (default)
+
+PUSH DWORD [stdout]
+CALL fflush
+ADD ESP, 4
+
+MOV ESP, EBP
+POP EBP
+
+MOV EAX, 1
+XOR EBX, EBX
+INT 0x80
+'''
+
+
+class AssemblyWriter:
+    @staticmethod
+    def write_instructions(instructions):
+        filename = sys.argv[1]
+        output_filename = filename.replace('.lua', '.asm')
+        with open(output_filename, 'a') as file:  # Use 'a' mode to append to the file
+            if file.tell() == 0:  # Check if the file is empty
+                file.write(cabecalho)  # Add cabecalho only if the file is empty
+            file.write(instructions)
+            # Do not add rodape here
 
 class PrePro:
     @staticmethod
@@ -20,18 +101,36 @@ class PrePro:
 class SymbolTable:
     def __init__(self):
         self.symbol_table = {}
+        self.offset = 0
+    
+    def create_entry(self, identifier):
+        self.offset += 4
+        self.symbol_table[identifier] = ((None, None), self.offset)
 
-    def set(self, identifier, value):
-        self.symbol_table[identifier] = value
+    def set(self, identifier, value): #value é uma tupla de valor e tipo
+        created = False
+        if identifier not in self.symbol_table:
+            self.create_entry(identifier)
+            created = True
+        self.symbol_table[identifier] = (value, self.symbol_table[identifier][1])
 
     def get(self, identifier):
         if identifier in self.symbol_table:
             return self.symbol_table[identifier]
 
+    
 class Node:
+    i = 0
+
     def __init__(self, value=None):
         self.value = value
         self.children = []
+        self.id = self.newId()
+
+    @staticmethod
+    def newId():
+        Node.i += 1
+        return Node.i
 
     def evaluate(self):
         pass
@@ -43,26 +142,38 @@ class Block(Node):
             if child != None:
                 child.evaluate(symbol_table)
 
-
 class Assignment(Node):
     def evaluate(self, symbol_table):
         identifier = self.children[0]
         value_node = self.children[1]  # Acessando o nó de valor
+        #print(f"identifier: {identifier}")
+        #print(f"value_node: {value_node}")
+        #print(f"isinstance(value_node, IntVal): {isinstance(value_node, IntVal)}")
         if isinstance(value_node, IntVal):  # Verificando se o nó de valor é do tipo IntVal
             value = value_node.evaluate()  # Se for, apenas obtemos o valor
         # faz um elif para vericar se é um Read, e aí não passa o symbol_table
         elif isinstance(value_node, Read):
-            value = value_node.evaluate()
+            #faz o evaluate do read de modo que o metodo consiga acessar a posição do symbol_table para gerar o assembly corretamente
+            value = value_node.evaluate(symbol_table.get(identifier)[1])
         # vamos ver se é uma string
         elif isinstance(value_node, String):
             value = value_node.evaluate()
         else:
             value = value_node.evaluate(symbol_table)  # Caso contrário, avaliamos a expressão
+        # Para o assembly, verificar se é a primeira declaração da variável (value[1] == "")
+        #if value.value[1] == "":
+        #    AssemblyWriter.write_instructions(f"PUSH DWORD 0\n")
+        
+        #AssemblyWriter.write_instructions(f"PUSH DWORD 0\n")
+        if not (isinstance(value_node, Read)):
+            AssemblyWriter.write_instructions(f"MOV EAX, {value.value[0]}\n")
+            AssemblyWriter.write_instructions(f"MOV [EBP-{symbol_table.get(identifier)[1]}], EAX\n")
         symbol_table.set(identifier, value)
 
 
 class BinOp(Node):
     def evaluate(self, symbol_table):
+        #print(f"self.value: {self.value}")
         left = self.children[0]
         right = self.children[1]
         if not isinstance(left, IntVal) and not isinstance(left, String):
@@ -73,83 +184,98 @@ class BinOp(Node):
 
         # adicionar operador de concatenação
         if self.value == '..':
-            #print(f"left: {left} right: {right} ...")
-            #print(isinstance(left, IntVal))
             if isinstance(left, IntVal):
                  left = String((str(left.value[0]), 'STRING'))
-                 #print(f"left: {left}")
             if isinstance(right, IntVal):
                 right = String((str(right.value[0]), 'STRING'))
-            #print(f"isinstance(left, tuple): {isinstance(left, tuple)}")
             if isinstance(left, tuple) and isinstance(right, tuple):
                 return String((left[0] + right[0], 'STRING'))
             elif isinstance(left, String) and isinstance(right, tuple):
                 return String((left.value[0] + right[0], 'STRING'))
-            # print(f"left: {left} right: {right}")
-            # print(String((left.value[0] + right.value[0], 'STRING')))
             if not isinstance(left, String) or not isinstance(right, String):
-                #print(f"-------------------------------------")
-                #print(f"left: {left} right.value[0]: {right.value[0]}")
-                #print(f"-------------------------------------")
-                #print(f"{left[0] + right.value[0]}")
                 return String((left[0] + right.value[0], 'STRING'))
             return String((left.value[0] + right.value[0], 'STRING'))
-
-        # Alterando a gambiarra da versão 2.1 ue verificava IntVal e int de cada lado:
-        # se right não for IntVal, transforma em IntVal right e left
-        # if not isinstance(right, IntVal):
-        #     right = IntVal(right.value)
-        # if not isinstance(left, IntVal):
-        #     left = IntVal(left.value)
-        # Operações binárias
-        if self.value == '+':
-            return IntVal((left.value[0] + right.value[0], 'INT'))
-        elif self.value == '-':
-            return IntVal((left.value[0] - right.value[0], 'INT'))
-        elif self.value == '*':
-            return IntVal((left.value[0] * right.value[0], 'INT'))
-        elif self.value == '/':
-            return IntVal((left.value[0] // right.value[0], 'INT'))
-        # adicionar operadores de comparação and, or, ==, <, >:
-        elif self.value == 'or':
-            if left.value[1] == 'INT' and right.value[1] == 'INT':
-                if left.value[0] or right.value[0]:
-                    return IntVal((1, 'INT'))
-                return IntVal((0, 'INT'))
-            raise TypeError("Operação não suportada para os valores tipos fornecidos")
-        elif self.value == 'and':
-            if left.value[1] == 'INT' and right.value[1] == 'INT':
-                if left.value[0] and right.value[0]:
-                    return IntVal((1, 'INT'))
-                return IntVal((0, 'INT'))
-            raise TypeError("Operação não suportada para os valores tipos fornecidos")
-        elif self.value == '==':
-            if (isinstance(left, String) or isinstance(left, IntVal)) and (isinstance(right, String) or isinstance(right, IntVal)):
-                if left.value[0] == right.value[0]:
-                    return IntVal((1, 'INT'))
-                return IntVal((0, 'INT'))
-            elif isinstance(left, tuple) and isinstance(right, tuple):
-                if left[0] == right[0]:
-                    return IntVal((1, 'INT'))
-                return IntVal((0, 'INT'))
-        elif self.value == '<':
-            if (isinstance(left, String) or isinstance(left, IntVal)) and (isinstance(right, String) or isinstance(right, IntVal)):
-                if left.value[0] < right.value[0]:
-                    return IntVal((1, 'INT'))
-                return IntVal((0, 'INT'))
-            elif isinstance(left, tuple) and isinstance(right, tuple):
-                if left[0] < right[0]:
-                    return IntVal((1, 'INT'))
-                return IntVal((0, 'INT'))
-        elif self.value == '>':
-            if (isinstance(left, String) or isinstance(left, IntVal)) and (isinstance(right, String) or isinstance(right, IntVal)):
-                if left.value[0] > right.value[0]:
-                    return IntVal((1, 'INT'))
-                return IntVal((0, 'INT'))
-            elif isinstance(left, tuple) and isinstance(right, tuple):
-                if left[0] > right[0]:
-                    return IntVal((1, 'INT'))
-                return IntVal((0, 'INT'))
+        
+        if self.value in ['+', '-', '*', '/'] or self.value in ['or', 'and', '==', '<', '>']:
+            #print(f"Estou no BinOp")
+            #print(f"left: {left}")
+            #print(f"right: {right}")
+            #se right não for uma tupla, transforma em uma com a posição 0 sendo o valor e a posição 1 sendo None
+            if not isinstance(right, tuple):
+                right = (right, None)
+            #se left não for uma tupla, transforma em uma com a posição 0 sendo o valor e a posição 1 sendo None
+            if not isinstance(left, tuple):
+                left = (left, None)
+            #print(f"left: {left}")
+            #print(f"right: {right}")
+            AssemblyWriter.write_instructions(f"MOV EAX, {right[0].value[0]}\n")
+            AssemblyWriter.write_instructions(f"PUSH EAX\n")
+            AssemblyWriter.write_instructions(f"MOV EAX, {right[0].value[0]}\n")
+            AssemblyWriter.write_instructions(f"POP EBX\n")
+            if self.value == '+':
+                AssemblyWriter.write_instructions(f"ADD EAX, EBX\n")
+                #print(IntVal((left[0].value[0] + right[0].value[0], 'INT')))
+                return IntVal((left[0].value[0] + right[0].value[0], 'INT'))
+            elif self.value == '-':
+                AssemblyWriter.write_instructions(f"SUB EAX, EBX\n")
+                return IntVal((left[0].value[0] - right[0].value[0], 'INT'))
+            elif self.value == '*':
+                AssemblyWriter.write_instructions(f"IMUL EAX, EBX\n")
+                return IntVal((right[0].value[0] * right[0].value[0], 'INT'))
+            elif self.value == '/':
+                AssemblyWriter.write_instructions(f"MOV EDX, 0\n")  # Clear EDX for division
+                AssemblyWriter.write_instructions(f"IDIV EBX\n")
+                return IntVal((right[0].value[0] // right[0].value[0], 'INT'))
+            # adicionar operadores de comparação and, or, ==, <, >:
+            elif self.value == 'or':
+                if left[0].value[1] == 'INT' and right[0].value[1] == 'INT':
+                    if left[0].value[0] or right[0].value[0]:
+                        return IntVal((1, 'INT'))
+                    return IntVal((0, 'INT'))
+                raise TypeError("Operação não suportada para os valores tipos fornecidos")
+            elif self.value == 'and':
+                if left[0].value[1] == 'INT' and right[0].value[1] == 'INT':
+                    if left[0].value[0] and right[0].value[0]:
+                        return IntVal((1, 'INT'))
+                    return IntVal((0, 'INT'))
+                raise TypeError("Operação não suportada para os valores tipos fornecidos")
+            elif self.value == '==':
+                if (isinstance(left, String) or isinstance(left, IntVal)) and (isinstance(right, String) or isinstance(right, IntVal)):
+                    if left.value[0] == right.value[0]:
+                        return IntVal((1, 'INT'))
+                    return IntVal((0, 'INT'))
+                elif isinstance(left, tuple) and isinstance(right, tuple):
+                    if left[0].value == right[0].value:
+                        return IntVal((1, 'INT'))
+                    return IntVal((0, 'INT'))
+            elif self.value == '<':
+                #print(f"self.value: {self.value}")
+                
+                if (isinstance(left, String) or isinstance(left, IntVal)) and (isinstance(right, String) or isinstance(right, IntVal)):
+                    if left.value[0] < right.value[0]:
+                        return IntVal((1, 'INT'))
+                    return IntVal((0, 'INT'))
+                elif isinstance(left, tuple) and isinstance(right, tuple):
+                    #print("I will return here")
+                    #print(f"left[0].value[0]: {left[0].value[0]}")
+                    #print(f"right[0].value[0]: {right[0].value[0]}")
+                    #print(f"left[0].value[0] < right[0].value[0]]: {left[0].value[0] < right[0].value[0]}")
+                    if left[0].value[0] < right[0].value[0]:
+                        return IntVal((1, 'INT'))
+                    return IntVal((0, 'INT'))
+            elif self.value == '>':
+                if (isinstance(left, String) or isinstance(left, IntVal)) and (isinstance(right, String) or isinstance(right, IntVal)):
+                    if left.value[0] > right.value[0]:
+                        return IntVal((1, 'INT'))
+                    return IntVal((0, 'INT'))
+                elif isinstance(left, tuple) and isinstance(right, tuple):
+                    #print("Yo soy un tuple")
+                    #print(f"left[0].value[0]: {left[0].value[0]}")
+                    #print(f"right[0].value[0]: {right[0].value[0]}")
+                    #print(f"left[0].value[0] < right[0].value[0]]: {left[0].value[0] < right[0].value[0]}")
+                    if left[0].value[0] > right[0].value[0]:
+                        return IntVal((1, 'INT'))
+                    return IntVal((0, 'INT'))
         else:
             raise TypeError("Operação não suportada para os valores fornecidos")
 
@@ -176,18 +302,23 @@ class UnOp(Node):
 
 class IntVal(Node):
     def evaluate(self):
+        #AssemblyWriter.write_instructions(f"MOV EAX, {self.value[0]}\n")
         return IntVal(self.value)
 
 
 class Identifier(Node):
     def evaluate(self, symbol_table):
-        if symbol_table.get(self.value) is None:
-            raise NameError(f"Variável '{self.value}' não definida na tabela de símbolos!")
         return symbol_table.get(self.value)
 
 
 class Read(Node):
-    def evaluate(self):
+    def evaluate(self, identifier):
+        AssemblyWriter.write_instructions(f"PUSH scanint\n")
+        AssemblyWriter.write_instructions(f"PUSH formatin\n")
+        AssemblyWriter.write_instructions(f"CALL scanf\n")
+        AssemblyWriter.write_instructions(f"ADD ESP, 8\n")
+        AssemblyWriter.write_instructions(f"MOV EAX, DWORD [scanint]\n")
+        AssemblyWriter.write_instructions(f"MOV [EBP-{identifier}], EAX\n")
         return IntVal((int(input()), 'INT'))
 
 
@@ -205,42 +336,91 @@ class NoOp(Node):
     def evaluate(self):
         pass
 
+class VarDec(Node):
+    def evaluate(self, symbol_table):
+        AssemblyWriter.write_instructions(f"PUSH DWORD 0\n")
+        return
+
 
 class Print(Node):
     def evaluate(self, symbol_table):
         # avalia se children[0] é um IntVal ou uma expressão
+        #print("Vim aqui!")
         if isinstance(self.children[0], IntVal) or isinstance(self.children[0], String):
-            print(self.children[0].evaluate())
+            AssemblyWriter.write_instructions(f"MOV EAX, {self.children[0].value[0]}\n")
+            AssemblyWriter.write_instructions(f"PUSH EAX\n")
+            AssemblyWriter.write_instructions(f"PUSH formatout\n")
+            AssemblyWriter.write_instructions(f"CALL printf\n")
+            AssemblyWriter.write_instructions(f"ADD ESP, 8\n")
+            print(self.children[0].evaluate().value[0])
         else:
-            #print(f"self.children[0].evaluate(symbol_table): {self.children[0].evaluate(symbol_table).value}")
-            print(self.children[0].evaluate(symbol_table).value[0])
+            #print("Else")
+            # checar se é binOp. Se for, avaliar
+            if isinstance(self.children[0], BinOp):
+                #print("É BinOp")
+
+                #print(self.children[0].evaluate)
+                print(self.children[0].evaluate(symbol_table).value[0])
+                #salvar o resultado em EAX e chamar o printf
+                AssemblyWriter.write_instructions(f"MOV EAX, {self.children[0].evaluate(symbol_table).value[0]}\n")
+                AssemblyWriter.write_instructions(f"PUSH EAX\n")
+                AssemblyWriter.write_instructions(f"PUSH formatout\n")
+                AssemblyWriter.write_instructions(f"CALL printf\n")
+                AssemblyWriter.write_instructions(f"ADD ESP, 8\n")
+                return
+            AssemblyWriter.write_instructions(f"MOV EAX, [EBP-{symbol_table.get(self.children[0].value)[1]}]\n")
+            AssemblyWriter.write_instructions(f"PUSH EAX\n")
+            AssemblyWriter.write_instructions(f"PUSH formatout\n")
+            AssemblyWriter.write_instructions(f"CALL printf\n")
+            AssemblyWriter.write_instructions(f"ADD ESP, 8\n")
+            print(self.children[0].evaluate(symbol_table)[0].value[0])
 
 
 class While(Node):
     def evaluate(self, symbol_table):
-        #print(self.children[0].children)
-        # raise
+        AssemblyWriter.write_instructions(f"LOOP_{self.id}:\n")
+        #Introduzir o filho 0 (condição) e retornar o resultado em EBX
+        AssemblyWriter.write_instructions(f"MOV EBX, {self.children[0].evaluate(symbol_table).value[0]}\n")
+        #Se EBX for False, pular para o final do loop
+        AssemblyWriter.write_instructions(f"CMP EBX, False\n")
+        AssemblyWriter.write_instructions(f"JE EXIT_{self.id}\n")
+        #Instruções do filho 1 (bloco de comandos)
         while self.children[0].evaluate(symbol_table).value[0]:  # reavalia a condição em cada iteração
-            # print(f"ST: {symbol_table.symbol_table}")
             self.children[1].evaluate(symbol_table)
-            #print(f"ST: {symbol_table.symbol_table['x_1']}") #debug
+        AssemblyWriter.write_instructions(f"EXIT_{self.id}:\n")
 
 
 class If(Node):
     def evaluate(self, symbol_table):
         expression = self.children[0]  # condição do if
         block = self.children[1]  # bloco de comandos
-        # verifica o len do nó, se for 3, tem um else
+
+        # Rótulo de início do if
+        AssemblyWriter.write_instructions(f"IF_{self.id}:\n")
+        # Avaliar a expressão e armazenar o resultado em EAX
+        expression.evaluate(symbol_table)
+        AssemblyWriter.write_instructions(f"CMP EAX, False\n")  # Comparar EAX com False (0)
+
+        # Verifica se há um bloco 'else'
         if len(self.children) == 3:
             block_else = self.children[2]  # bloco de comandos do else
-            if expression.evaluate(symbol_table):
-                block.evaluate(symbol_table)
-            else:
-                block_else.evaluate(symbol_table)
+            # Salto para 'else' se a condição for falsa
+            AssemblyWriter.write_instructions(f"JE ELSE_{self.id}\n")
+            # Executa o bloco 'if'
+            block.evaluate(symbol_table)
+            # Pula o bloco 'else' após o 'if'
+            AssemblyWriter.write_instructions(f"JMP EXIT_IF_{self.id}\n")
+            # Início do bloco 'else'
+            AssemblyWriter.write_instructions(f"ELSE_{self.id}:\n")
+            block_else.evaluate(symbol_table)
         else:
-            if expression.evaluate(symbol_table):
-                block.evaluate(symbol_table)
+            # Salto para o fim se a condição for falsa
+            AssemblyWriter.write_instructions(f"JE EXIT_IF_{self.id}\n")
+            # Executa o bloco 'if'
+            block.evaluate(symbol_table)
 
+        # Fim do bloco 'if'
+        AssemblyWriter.write_instructions(f"EXIT_IF_{self.id}:\n")
 
 class Token:
     def __init__(self, type: str, value):
@@ -403,6 +583,7 @@ class Parser:
             token = Parser.tokenizer.selectNext()
         # fazer o evaluate do bloco
         block_node.evaluate(Parser.symbol_table)
+        AssemblyWriter.write_instructions(rodape)
 
     @staticmethod
     def parseStatement(token):
@@ -434,7 +615,8 @@ class Parser:
             if token.type == 'IDENTIFIER':
                 identifier = token.value
                 token = Parser.tokenizer.selectNext()
-                if type(Parser.symbol_table.get(identifier)) is str:
+                # verifica se a variável já foi declarada checandop se o get é uma tupla
+                if isinstance(Parser.symbol_table.get(identifier), tuple):
                     raise NameError(f"Variável '{identifier}' já declarada!!")
                 # verifica se já faz assign na criação
                 if token.type == 'ASSIGN':
@@ -449,8 +631,10 @@ class Parser:
                     Parser.symbol_table.set(identifier, expression)
                     return assignment_node
                 elif token.type == 'NEWLINE':
-                    Parser.symbol_table.set(identifier, "_")
-                    return
+                    var_declaration = VarDec()
+                    var_declaration.value = token.value
+                    Parser.symbol_table.create_entry(identifier)
+                    return var_declaration
                 else:
                     raise SyntaxError("Erro: Esperado símbolo de atribuição '=' após identificador ou quebra de linha")
         # Se o token for um print, verifica se tem um (, expressao e um ). Se sim, cria um nó de print

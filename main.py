@@ -838,7 +838,7 @@ def main():
     filename = sys.argv[1]
     with open(filename, 'r') as file:
         code = file.read()
-        print(code)
+        raise TypeError(f"code: {code}")
     try:
         Parser.run(code)
     except Exception as e:

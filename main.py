@@ -717,6 +717,7 @@ class Parser:
                         else:
                             raise SyntaxError("Erro: Esperado quebra de linha após END")
         else:
+            print(token.value)
             raise SyntaxError("Erro: Comando inválido")
 
     @staticmethod

@@ -718,9 +718,8 @@ class Parser:
                             return if_node
                         else:
                             raise SyntaxError("Erro: Esperado quebra de linha após END")
-        # else:
-        #     print(token.value)
-        #     raise SyntaxError("Erro: Comando inválido")
+        else:
+            raise SyntaxError("Erro: Comando inválido")
 
     @staticmethod
     def parseExpression():
@@ -839,6 +838,7 @@ def main():
     filename = sys.argv[1]
     with open(filename, 'r') as file:
         code = file.read()
+        print(code)
     try:
         Parser.run(code)
     except Exception as e:

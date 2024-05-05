@@ -139,6 +139,7 @@ class Node:
 class Block(Node):
     def evaluate(self, symbol_table):
         for child in self.children:
+            #print(f"child: {child}")
             if child != None:
                 child.evaluate(symbol_table)
 
@@ -166,8 +167,14 @@ class Assignment(Node):
         
         #AssemblyWriter.write_instructions(f"PUSH DWORD 0\n")
         if not (isinstance(value_node, Read)):
-            AssemblyWriter.write_instructions(f"MOV EAX, {value.value[0]}\n")
-            AssemblyWriter.write_instructions(f"MOV [EBP-{symbol_table.get(identifier)[1]}], EAX\n")
+            if isinstance(value, IntVal):
+                AssemblyWriter.write_instructions(f"MOV EAX, {value.value[0]}\n")
+                AssemblyWriter.write_instructions(f"MOV [EBP-{symbol_table.get(identifier)[1]}], EAX\n")
+            else:
+                #print(f"value: {value}")
+                #print(f"value[0].value[0]: {value[0].value[0]}")
+                AssemblyWriter.write_instructions(f"MOV EAX, {value[0].value[0]}\n")
+                AssemblyWriter.write_instructions(f"MOV [EBP-{symbol_table.get(identifier)[1]}], EAX\n")
         symbol_table.set(identifier, value)
 
 
@@ -345,7 +352,6 @@ class VarDec(Node):
 class Print(Node):
     def evaluate(self, symbol_table):
         # avalia se children[0] é um IntVal ou uma expressão
-        #print("Vim aqui!")
         if isinstance(self.children[0], IntVal) or isinstance(self.children[0], String):
             AssemblyWriter.write_instructions(f"MOV EAX, {self.children[0].value[0]}\n")
             AssemblyWriter.write_instructions(f"PUSH EAX\n")
@@ -576,12 +582,14 @@ class Parser:
             block_node.children.append(statement)
             token = Parser.tokenizer.selectNext()
         # fazer o evaluate do bloco
+        #print(f"Hello from parseBlock")
         block_node.evaluate(Parser.symbol_table)
         AssemblyWriter.write_instructions(rodape)
 
     @staticmethod
     def parseStatement(token):
-        # print(f"token.value: {token.value}")
+        #print(f"token.value: {token.value}")
+        #print(f"token.type: {token.type}")
         # print(f"token.type: {token.type}")
         # Se o token for um /n, não faz nada
         if token.type == 'NEWLINE':
@@ -637,14 +645,11 @@ class Parser:
         elif token.type == 'PRINT':
             token = Parser.tokenizer.selectNext()
             if token.type == 'LPAR':
-                # print("-------------------------------------------\n")
                 expression, token = Parser.parseBooleanExpression()
-                # print(f"symbol_table(x): {Parser.symbol_table.symbol_table}\n")
                 if token.type == 'RPAR':
                     print_node = Print()
                     print_node.value = "print"
                     print_node.children.append(expression)
-                    # print(f"symbol_table(x): {Parser.symbol_table.symbol_table}\n")
                     return print_node
                 else:
                     raise SyntaxError("Erro: Parênteses não fechados")
@@ -689,9 +694,35 @@ class Parser:
                         # verifica se o token é um EOF e lança um erro
                         if token.type == 'EOF':
                             raise SyntaxError("Erro: Esperado 'END' ao usar If")
+                        #se o token.type já for ELSE, o IF não tem bloco de comandos
+                        if token.type == 'ELSE':
+                            tem_else = True
+                            token = Parser.tokenizer.selectNext()
+                            if token.type == 'NEWLINE':
+                                block_node_else = Block()
+                                token = Parser.tokenizer.selectNext()
+                                while token.type != 'END':
+                                    statement = Parser.parseStatement(token)
+                                    block_node_else.children.append(statement)
+                                    token = Parser.tokenizer.selectNext()
+                                if token.type == 'END':
+                                    if_node = If()
+                                    if_node.children.append(expression)
+                                    if_node.children.append(block_node)
+                                    # se tiver else, adiciona o bloco de comandos do else
+                                    if tem_else:
+                                        if_node.children.append(block_node_else)
+                                    # verifica se o próximo token é um \n
+                                    token = Parser.tokenizer.selectNext()
+                                    if token.type == 'NEWLINE':
+                                        return if_node
+                                    else:
+                                        raise SyntaxError("Erro: Esperado quebra de linha após END")
+                            else:
+                                raise SyntaxError("Erro: Esperado '\n' após ELSE")
                         statement = Parser.parseStatement(token)
-                        block_node.children.append(statement)
                         token = Parser.tokenizer.selectNext()
+                        block_node.children.append(statement)
                         if token.type == 'ELSE':
                             tem_else = True
                             token = Parser.tokenizer.selectNext()
@@ -719,7 +750,7 @@ class Parser:
                         else:
                             raise SyntaxError("Erro: Esperado quebra de linha após END")
         else:
-            raise SyntaxError(f"Erro: Comando inválido: {token.value}. \n O código de entrada foi:\n {Parser.tokenizer.source}")
+            raise SyntaxError(f"Erro: Comando inválido: {token.value}.")# \n O código de entrada foi:\n {Parser.tokenizer.source}")
 
     @staticmethod
     def parseExpression():

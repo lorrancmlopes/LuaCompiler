@@ -581,8 +581,8 @@ class Parser:
 
     @staticmethod
     def parseStatement(token):
-        print(f"token.value: {token.value}")
-        print(f"token.type: {token.type}")
+        # print(f"token.value: {token.value}")
+        # print(f"token.type: {token.type}")
         # Se o token for um /n, não faz nada
         if token.type == 'NEWLINE':
             return
@@ -838,7 +838,7 @@ def main():
     filename = sys.argv[1]
     with open(filename, 'r') as file:
         code = file.read()
-        raise TypeError(f"code: {code}")
+        #raise TypeError(f"code: {code}")
     try:
         Parser.run(code)
     except Exception as e:

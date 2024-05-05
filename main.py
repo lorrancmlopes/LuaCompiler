@@ -581,6 +581,8 @@ class Parser:
 
     @staticmethod
     def parseStatement(token):
+        print(f"token.value: {token.value}")
+        print(f"token.type: {token.type}")
         # Se o token for um /n, não faz nada
         if token.type == 'NEWLINE':
             return

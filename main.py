@@ -719,7 +719,7 @@ class Parser:
                         else:
                             raise SyntaxError("Erro: Esperado quebra de linha após END")
         else:
-            raise SyntaxError("Erro: Comando inválido")
+            raise SyntaxError(f"Erro: Comando inválido: {token.value}. \n O código de entrada foi:\n {Parser.tokenizer.source}")
 
     @staticmethod
     def parseExpression():

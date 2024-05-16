@@ -3,7 +3,7 @@ import re
 
 # Palavras reservadas
 RESERVED_KEYWORDS = ['print', 'if', 'else', 'while', 'then', 'end', 'do', 'or', 'and', 'not', 'read',
-                     'local']  # atulizando v2.3 (local)
+                     'local', 'function', ',', 'return']  
 
 cabecalho = '''
 ; constantes
@@ -117,8 +117,16 @@ class SymbolTable:
     def get(self, identifier):
         if identifier in self.symbol_table:
             return self.symbol_table[identifier]
+        
+class FuncTable:
+    functions = {}
+    @staticmethod
+    def get(func_name):
+        return FuncTable.functions.get(func_name)
+    @staticmethod
+    def set(func_name, node):
+        FuncTable.functions[func_name] = node
 
-    
 class Node:
     i = 0
 
@@ -135,20 +143,20 @@ class Node:
     def evaluate(self):
         pass
 
-
 class Block(Node):
     def evaluate(self, symbol_table):
         for child in self.children:
-            #print(f"child: {child}")
             if child != None:
+                #verifica se o nó é um return
+                if isinstance(child, Return):
+                    return child.evaluate(symbol_table)[0]
                 child.evaluate(symbol_table)
+
 
 class Assignment(Node):
     def evaluate(self, symbol_table):
         identifier = self.children[0]
         value_node = self.children[1]  # Acessando o nó de valor
-        #print(f"identifier: {identifier}")
-        #print(f"value_node: {value_node}")
         #print(f"isinstance(value_node, IntVal): {isinstance(value_node, IntVal)}")
         if isinstance(value_node, IntVal):  # Verificando se o nó de valor é do tipo IntVal
             value = value_node.evaluate()  # Se for, apenas obtemos o valor
@@ -161,6 +169,7 @@ class Assignment(Node):
             value = value_node.evaluate()
         else:
             value = value_node.evaluate(symbol_table)  # Caso contrário, avaliamos a expressão
+
         # Para o assembly, verificar se é a primeira declaração da variável (value[1] == "")
         #if value.value[1] == "":
         #    AssemblyWriter.write_instructions(f"PUSH DWORD 0\n")
@@ -168,19 +177,19 @@ class Assignment(Node):
         #AssemblyWriter.write_instructions(f"PUSH DWORD 0\n")
         if not (isinstance(value_node, Read)):
             if isinstance(value, IntVal):
-                AssemblyWriter.write_instructions(f"MOV EAX, {value.value[0]}\n")
-                AssemblyWriter.write_instructions(f"MOV [EBP-{symbol_table.get(identifier)[1]}], EAX\n")
+                pass
+                # AssemblyWriter.write_instructions(f"MOV EAX, {value.value[0]}\n")
+                # AssemblyWriter.write_instructions(f"MOV [EBP-{symbol_table.get(identifier)[1]}], EAX\n")
             else:
+                pass
                 #print(f"value: {value}")
                 #print(f"value[0].value[0]: {value[0].value[0]}")
-                AssemblyWriter.write_instructions(f"MOV EAX, {value[0].value[0]}\n")
-                AssemblyWriter.write_instructions(f"MOV [EBP-{symbol_table.get(identifier)[1]}], EAX\n")
+                # AssemblyWriter.write_instructions(f"MOV EAX, {value[0].value[0]}\n")
+                # AssemblyWriter.write_instructions(f"MOV [EBP-{symbol_table.get(identifier)[1]}], EAX\n")
         symbol_table.set(identifier, value)
-
-
+        
 class BinOp(Node):
     def evaluate(self, symbol_table):
-        #print(f"self.value: {self.value}")
         left = self.children[0]
         right = self.children[1]
         if not isinstance(left, IntVal) and not isinstance(left, String):
@@ -188,7 +197,6 @@ class BinOp(Node):
 
         if not isinstance(right, IntVal) and not isinstance(right, String):
             right = right.evaluate(symbol_table)
-
         # adicionar operador de concatenação
         if self.value == '..':
             if isinstance(left, IntVal):
@@ -204,7 +212,6 @@ class BinOp(Node):
             return String((left.value[0] + right.value[0], 'STRING'))
         
         if self.value in ['+', '-', '*', '/'] or self.value in ['or', 'and', '==', '<', '>']:
-            #print(f"Estou no BinOp")
             #print(f"left: {left}")
             #print(f"right: {right}")
             #se right não for uma tupla, transforma em uma com a posição 0 sendo o valor e a posição 1 sendo None
@@ -213,8 +220,6 @@ class BinOp(Node):
             #se left não for uma tupla, transforma em uma com a posição 0 sendo o valor e a posição 1 sendo None
             if not isinstance(left, tuple):
                 left = (left, None)
-            #print(f"left: {left}")
-            #print(f"right: {right}")
             AssemblyWriter.write_instructions(f"MOV EAX, {right[0].value[0]}\n")
             AssemblyWriter.write_instructions(f"PUSH EAX\n")
             AssemblyWriter.write_instructions(f"MOV EAX, {right[0].value[0]}\n")
@@ -353,11 +358,11 @@ class Print(Node):
     def evaluate(self, symbol_table):
         # avalia se children[0] é um IntVal ou uma expressão
         if isinstance(self.children[0], IntVal) or isinstance(self.children[0], String):
-            AssemblyWriter.write_instructions(f"MOV EAX, {self.children[0].value[0]}\n")
-            AssemblyWriter.write_instructions(f"PUSH EAX\n")
-            AssemblyWriter.write_instructions(f"PUSH formatout\n")
-            AssemblyWriter.write_instructions(f"CALL printf\n")
-            AssemblyWriter.write_instructions(f"ADD ESP, 8\n")
+            # AssemblyWriter.write_instructions(f"MOV EAX, {self.children[0].value[0]}\n")
+            # AssemblyWriter.write_instructions(f"PUSH EAX\n")
+            # AssemblyWriter.write_instructions(f"PUSH formatout\n")
+            # AssemblyWriter.write_instructions(f"CALL printf\n")
+            # AssemblyWriter.write_instructions(f"ADD ESP, 8\n")
             print(self.children[0].evaluate().value[0])
         else:
             #print("Else")
@@ -368,19 +373,18 @@ class Print(Node):
                 #print(self.children[0].evaluate)
                 print(self.children[0].evaluate(symbol_table).value[0])
                 #salvar o resultado em EAX e chamar o printf
-                AssemblyWriter.write_instructions(f"MOV EAX, {self.children[0].evaluate(symbol_table).value[0]}\n")
-                AssemblyWriter.write_instructions(f"PUSH EAX\n")
-                AssemblyWriter.write_instructions(f"PUSH formatout\n")
-                AssemblyWriter.write_instructions(f"CALL printf\n")
-                AssemblyWriter.write_instructions(f"ADD ESP, 8\n")
+                # AssemblyWriter.write_instructions(f"MOV EAX, {self.children[0].evaluate(symbol_table).value[0]}\n")
+                # AssemblyWriter.write_instructions(f"PUSH EAX\n")
+                # AssemblyWriter.write_instructions(f"PUSH formatout\n")
+                # AssemblyWriter.write_instructions(f"CALL printf\n")
+                # AssemblyWriter.write_instructions(f"ADD ESP, 8\n")
                 return
-            AssemblyWriter.write_instructions(f"MOV EAX, [EBP-{symbol_table.get(self.children[0].value)[1]}]\n")
-            AssemblyWriter.write_instructions(f"PUSH EAX\n")
-            AssemblyWriter.write_instructions(f"PUSH formatout\n")
-            AssemblyWriter.write_instructions(f"CALL printf\n")
-            AssemblyWriter.write_instructions(f"ADD ESP, 8\n")
+            # AssemblyWriter.write_instructions(f"MOV EAX, [EBP-{symbol_table.get(self.children[0].value)[1]}]\n")
+            # AssemblyWriter.write_instructions(f"PUSH EAX\n")
+            # AssemblyWriter.write_instructions(f"PUSH formatout\n")
+            # AssemblyWriter.write_instructions(f"CALL printf\n")
+            # AssemblyWriter.write_instructions(f"ADD ESP, 8\n")
             print(self.children[0].evaluate(symbol_table)[0].value[0])
-
 
 class While(Node):
     def evaluate(self, symbol_table):
@@ -422,6 +426,55 @@ class If(Node):
                 block.evaluate(symbol_table)
         AssemblyWriter.write_instructions(f"ENDIF_{self.id}:\n")
 
+#classe para o return 
+class Return(Node):
+    def __init__(self, value=None):
+        super().__init__(value=value)
+
+    def evaluate(self, symbol_table):
+        return self.children[0].evaluate(symbol_table)
+
+class FuncDec(Node):
+    def evaluate(self, symbol_table):
+        #set na funtable passando o nome da função e o node para o FuncTable
+        FuncTable.set(self.value, self)
+        #os filhos que são strings são os argumentos da funçãoo. Os filhos que são blocos são os comandos da função
+
+
+class FuncCall(Node):
+    def evaluate(self, symbol_table):
+        #recupera o nó de declaração da função na FuncTable, atribuindo os valores dos argumentos de entrada e executando o bloco de comandos
+        func_node = FuncTable.get(self.value)
+        #criar uma nova tabela de símbolos para a função (temporária, será deletada após a execução da função)
+        func_symbol_table = SymbolTable()
+        #percorre func_node.children até achar o elementpo que é um bloco de comandos
+        for i in range(len(func_node.children)):
+            if isinstance(func_node.children[i], Block):
+                break
+        #verifica se o número de argumentos passados é igual ao número de argumentos esperaods pela função(i)
+        if len(self.children) != i:
+            raise ValueError("Número de argumentos passados diferente do número de argumentos esperados pela função")
+        
+        # for j in range(len(self.children)):
+        #     if isinstance(self.children[j], IntVal) or isinstance(self.children[j], String):
+        #         print("if")
+        #         print(f"self.children[j]: {self.children[j]}")
+        #         print(f"self.children[j].evaluate(): {self.children[j].evaluate().value[0]}")
+        #     else:
+        #         print("else")
+        #         print(f"self.children[j]: {self.children[j]}")
+        #         print(f"self.children[j].evaluate(symbol_table): {self.children[j].evaluate(symbol_table)[0].value[0]}")
+
+        #preenche uma tabela de símbolos temporária para a função e seta os valores dos argumentos passados
+        for j in range(len(self.children)):
+            if isinstance(self.children[j], IntVal) or isinstance(self.children[j], String):
+                func_symbol_table.set(func_node.children[j], self.children[j].evaluate())
+            else:
+                func_symbol_table.set(func_node.children[j], self.children[j].evaluate(symbol_table)[0])
+        #exibe a tabela de símbolos temporária
+        #executa o bloco de comandos da função
+        return func_node.children[i].evaluate(func_symbol_table)
+    
 class Token:
     def __init__(self, type: str, value):
         self.type = type
@@ -511,6 +564,10 @@ class Tokenizer:
                 if self.current_char == '.':
                     self.advance()
                     return Token('CONCAT', '..')
+            #adicionar a virgula
+            if self.current_char == ',':
+                self.advance()
+                return Token('COMMA', ',')
             # adicionando string em lua
             if self.current_char == '"':
                 self.advance()
@@ -554,6 +611,10 @@ class Tokenizer:
                         return Token('READ', 'read')
                     elif identifier == 'local':
                         return Token('LOCAL', 'local')
+                    elif identifier == 'function':
+                        return Token('FUNCTION', 'function')
+                    elif identifier == 'return':
+                        return Token('RETURN','return')
                 return Token('IDENTIFIER', identifier)
             # Se não corresponder a nenhum dos tipos de token conhecidos, levanta um erro
             raise SyntaxError("Caractere inválido encontrado: {}".format(self.current_char))
@@ -578,7 +639,7 @@ class Parser:
         # tabela de símbolos
         Parser.symbol_table = SymbolTable()
         while token.type != 'EOF':
-            statement = Parser.parseStatement(token)
+            statement = Parser.parseStatement(token, False)
             block_node.children.append(statement)
             token = Parser.tokenizer.selectNext()
         # fazer o evaluate do bloco
@@ -587,10 +648,7 @@ class Parser:
         AssemblyWriter.write_instructions(rodape)
 
     @staticmethod
-    def parseStatement(token):
-        #print(f"token.value: {token.value}")
-        #print(f"token.type: {token.type}")
-        # print(f"token.type: {token.type}")
+    def parseStatement(token, isFunction):
         # Se o token for um /n, não faz nada
         if token.type == 'NEWLINE':
             return
@@ -599,8 +657,8 @@ class Parser:
             identifier = token.value
             token = Parser.tokenizer.selectNext()
             if token.type == 'ASSIGN':
-                if Parser.symbol_table.get(identifier) is None:
-                    raise NameError(f"Variável '{identifier}' não definida na tabela de símbolos!")
+                # if Parser.symbol_table.get(identifier) is None:
+                #     raise NameError(f"Variável '{identifier}' não definida na tabela de símbolos!")
                 expression, next_token = Parser.parseBooleanExpression()
                 # Verifica se o próximo token é um /n, se não for, levanta um erro
                 if next_token.type != 'NEWLINE':
@@ -609,10 +667,44 @@ class Parser:
                 assignment_node.value = token.value
                 assignment_node.children.append(identifier)
                 assignment_node.children.append(expression)
-                Parser.symbol_table.set(identifier, expression) 
+                if isFunction is False:
+                    Parser.symbol_table.set(identifier, expression) 
                 return assignment_node
+            elif token.type == 'LPAR':
+                block_node = Block()
+                token = Parser.tokenizer.selectNext()
+                func_call_node = FuncCall()
+                func_call_node.value = identifier
+                while token.type != 'RPAR':
+                    if token.type == 'INT':
+                        func_call_node.children.append(IntVal(token.value))
+                        token = Parser.tokenizer.selectNext()
+                        if token.type == 'COMMA':
+                            token = Parser.tokenizer.selectNext()
+                        else:
+                            break
+                    elif token.type == 'STRING':
+                        func_call_node.children.append(String((token.value, 'STRING')))
+                        token = Parser.tokenizer.selectNext()
+                        if token.type == 'COMMA':
+                            token = Parser.tokenizer.selectNext()
+                        else:
+                            break
+                    elif token.type == 'IDENTIFIER':
+                        func_call_node.children.append(Identifier(token.value))
+                        token = Parser.tokenizer.selectNext()
+                        if token.type == 'COMMA':
+                            token = Parser.tokenizer.selectNext()
+                        else:
+                            break
+                if token.type == 'RPAR':
+                    token = Parser.tokenizer.selectNext()
+                    if token.type == 'NEWLINE':
+                        return func_call_node
+                    else:
+                        raise SyntaxError("Erro: Esperado quebra de linha após a chamada da função")
             else:
-                raise SyntaxError("Erro: Esperado símbolo de atribuição '=' após identificador")
+                raise SyntaxError(f"Erro: Esperado símbolo de atribuição '=' após identificador. Encontradotoken.type: '{token.type},token.value:'{token.value}'")
         # Criação de variável (local)
         elif token.type == 'LOCAL':
             token = Parser.tokenizer.selectNext()
@@ -632,12 +724,14 @@ class Parser:
                     assignment_node.value = token.value
                     assignment_node.children.append(identifier)
                     assignment_node.children.append(expression)
-                    Parser.symbol_table.set(identifier, expression)
+                    if isFunction is False:
+                        Parser.symbol_table.set(identifier, expression)
                     return assignment_node
                 elif token.type == 'NEWLINE':
                     var_declaration = VarDec()
-                    var_declaration.value = token.value
-                    Parser.symbol_table.create_entry(identifier)
+                    var_declaration.value = identifier
+                    if isFunction is False:
+                        Parser.symbol_table.create_entry(identifier)
                     return var_declaration
                 else:
                     raise SyntaxError("Erro: Esperado símbolo de atribuição '=' após identificador ou quebra de linha")
@@ -668,7 +762,7 @@ class Parser:
                         # verifica se o token é um EOF e lança um erro
                         if token.type == 'EOF':
                             raise SyntaxError("Erro: Esperado 'END' ao usar While")
-                        statement = Parser.parseStatement(token)
+                        statement = Parser.parseStatement(token, isFunction)
                         block_node.children.append(statement)
                         token = Parser.tokenizer.selectNext()
                     while_node = While()
@@ -702,7 +796,7 @@ class Parser:
                                 block_node_else = Block()
                                 token = Parser.tokenizer.selectNext()
                                 while token.type != 'END':
-                                    statement = Parser.parseStatement(token)
+                                    statement = Parser.parseStatement(token, isFunction)
                                     block_node_else.children.append(statement)
                                     token = Parser.tokenizer.selectNext()
                                 if token.type == 'END':
@@ -720,7 +814,7 @@ class Parser:
                                         raise SyntaxError("Erro: Esperado quebra de linha após END")
                             else:
                                 raise SyntaxError("Erro: Esperado '\n' após ELSE")
-                        statement = Parser.parseStatement(token)
+                        statement = Parser.parseStatement(token, isFunction)
                         token = Parser.tokenizer.selectNext()
                         block_node.children.append(statement)
                         if token.type == 'ELSE':
@@ -730,7 +824,7 @@ class Parser:
                                 block_node_else = Block()
                                 token = Parser.tokenizer.selectNext()
                                 while token.type != 'END':
-                                    statement = Parser.parseStatement(token)
+                                    statement = Parser.parseStatement(token, isFunction)
                                     block_node_else.children.append(statement)
                                     token = Parser.tokenizer.selectNext()
                                 break
@@ -749,6 +843,52 @@ class Parser:
                             return if_node
                         else:
                             raise SyntaxError("Erro: Esperado quebra de linha após END")
+        #adicionando function e return
+        elif token.type == 'FUNCTION':
+            token = Parser.tokenizer.selectNext()
+            if token.type == 'IDENTIFIER':
+                identifier = token.value
+                token = Parser.tokenizer.selectNext()
+                if token.type == 'LPAR':
+                    token = Parser.tokenizer.selectNext()
+                    block_node = Block()
+                    func_dec_node = FuncDec()
+                    func_dec_node.value = identifier
+                    while token.type != 'RPAR':
+                        if token.type == 'IDENTIFIER':
+                            func_dec_node.children.append(token.value)
+                            token = Parser.tokenizer.selectNext()
+                            if token.type == 'COMMA':
+                                token = Parser.tokenizer.selectNext()
+                            else:
+                                break
+                    if token.type == 'RPAR':
+                        token = Parser.tokenizer.selectNext()
+                        if token.type == 'NEWLINE':
+                            token = Parser.tokenizer.selectNext()
+                            while token.type != 'END':
+                                statement = Parser.parseStatement(token, True)
+                                block_node.children.append(statement)
+                                token = Parser.tokenizer.selectNext()
+                            if token.type == 'END':
+                                func_dec_node.children.append(block_node)
+                                return func_dec_node
+                        else:
+                            raise SyntaxError("Erro: Esperado '\n' após parênteses")
+                    else:
+                        raise SyntaxError("Erro: Parênteses não fechados")
+                else:
+                    raise SyntaxError("Erro: Parênteses não abertos")
+            else:
+                raise SyntaxError("Erro: Esperado identificador após FUNCTION")
+        elif token.type == 'RETURN':
+            return_node = Return()
+            expression, token = Parser.parseBooleanExpression()
+            return_node.children.append(expression)
+            if token.type == 'NEWLINE':
+                return return_node
+            else:
+                raise SyntaxError("Erro: Esperado quebra de linha após RETURN")
         else:
             raise SyntaxError(f"Erro: Comando inválido: {token.value}.")# \n O código de entrada foi:\n {Parser.tokenizer.source}")
 
@@ -825,11 +965,42 @@ class Parser:
         # Se for um identificador, verifica se está na tabela de símbolos
         elif token.type == 'IDENTIFIER':
             identifier = token.value
-            # if Parser.symbol_table.get(identifier):
-            return Identifier(token.value), Parser.tokenizer.selectNext()
-            #comentei tentando resolver while
-            # else:
-            #     raise NameError(f"Variável '{identifier}' não definida na tabela de símbolos!.")
+            #verifica se o próximo token é um (	
+            token = Parser.tokenizer.selectNext()
+            if token.type == 'LPAR':
+                #se entrou aqui, é uma chamada de função
+                func_call_node = FuncCall()
+                func_call_node.value = identifier
+                token = Parser.tokenizer.selectNext()
+                while token.type != 'RPAR':
+                    if token.type == 'INT':
+                        func_call_node.children.append(IntVal(token.value))
+                        token = Parser.tokenizer.selectNext()
+                        if token.type == 'COMMA':
+                            token = Parser.tokenizer.selectNext()
+                        else:
+                            break
+                    elif token.type == 'STRING':
+                        func_call_node.children.append(String((token.value, 'STRING')))
+                        token = Parser.tokenizer.selectNext()
+                        if token.type == 'COMMA':
+                            token = Parser.tokenizer.selectNext()
+                        else:
+                            break
+                    elif token.type == 'IDENTIFIER':
+                        func_call_node.children.append(Identifier(token.value))
+                        token = Parser.tokenizer.selectNext()
+                        if token.type == 'COMMA':
+                            token = Parser.tokenizer.selectNext()
+                        else:
+                            break
+                if token.type == 'RPAR':
+                    return func_call_node, Parser.tokenizer.selectNext()
+                else:
+                    raise SyntaxError("Erro: Parênteses não fechados")
+            #se não for uma chamada de função, é uma variável
+            else:
+                return Identifier(identifier), token
         elif token.type == 'LPAR':
             result_expression, _ = Parser.parseBooleanExpression()
             if Parser.tokenizer.next.type == 'RPAR':

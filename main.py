@@ -162,7 +162,11 @@ class BinOp(Node):
                         return IntVal((1, 'INT'))
                     return IntVal((0, 'INT'))
                 elif isinstance(left, tuple) and isinstance(right, tuple):
-                    if left[0] == right[0]:
+                    if isinstance(left[0], str) and isinstance(right[0], str):
+                        if left[0] == right[0]:
+                            return IntVal((1, 'INT'))
+                        return IntVal((0, 'INT'))
+                    if left[0].value == right[0].value:
                         return IntVal((1, 'INT'))
                     return IntVal((0, 'INT'))
             elif self.value == '<':

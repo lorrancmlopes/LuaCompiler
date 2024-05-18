@@ -137,11 +137,11 @@ class BinOp(Node):
             elif self.value == '-':
                 return IntVal((left[0].value[0] - right[0].value[0], 'INT'))
             elif self.value == '*':
-                return IntVal((right[0].value[0] * right[0].value[0], 'INT'))
+                return IntVal((left[0].value[0] * right[0].value[0], 'INT'))
             elif self.value == '/':
-                if left[0].value[0] == 0:
+                if right[0].value[0] == 0:
                     return IntVal((0, 'INT'))
-                return IntVal((right[0].value[0] // left[0].value[0], 'INT'))
+                return IntVal((left[0].value[0] // right[0].value[0], 'INT'))
             # adicionar operadores de comparação and, or, ==, <, >:
             elif self.value == 'or':
                 if left[0].value[1] == 'INT' and right[0].value[1] == 'INT':
@@ -534,10 +534,13 @@ class Parser:
                 #print(f"next_token.type: {next_token.type}")
                 # se o next_token for uma vírgula, ainda não é o fim da expressão, indica que é uma função com argumentos
                 if next_token.type == 'COMMA':
+                    next_token = Parser.tokenizer.selectNext()
+                    #se o proximo token for uma quebra de linha, leva um erro
+                    if next_token.type == 'NEWLINE':
+                        raise SyntaxError("Erro: Esperado expressão após ','")
                     func_call_node = FuncCall()
                     func_call_node.value = identifier
                     func_call_node.children.append(expression)
-                    next_token = Parser.tokenizer.selectNext()
                     while next_token.type != 'RPAR':
                         if next_token.type == 'INT':
                             func_call_node.children.append(IntVal(next_token.value))
